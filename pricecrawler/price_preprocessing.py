@@ -96,3 +96,12 @@ goldprice.to_csv('goldprice_preprocessed.csv',index=False)
 #day_mean.to_csv('day_mean.csv')
 #month_count.to_csv('month_count.csv')
 #month_mean.to_csv('month_mean.csv')
+
+get_polarity_mean = pd.read_csv('C:/Users/tan.joryi/Desktop/p/data_mining/01. web scraping/WQD7005-data-mining-master/newscrawler/polarity_mean.csv')
+get_polarity_mean['DateTime'] = pd.to_datetime(get_polarity_mean['DateTime'])
+
+merge = pd.merge(get_polarity_mean,
+                 goldprice[['date_text','trend']],
+                 how='left',
+                 left_on=['DateTime'],
+                 right_on=['date_text'])
