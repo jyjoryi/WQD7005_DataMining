@@ -35,12 +35,13 @@ class newsSpider(scrapy.Spider):
     name = 'news'
         
     def start_requests(self):
-        for i in range(1,11):
+        for i in range(1,501):
             yield scrapy.Request('https://markets.businessinsider.com/news/ressort/commodities?p=%s' % i, callback=self.parse)
             
     def parse(self, response):
         for row in response.xpath("//table[@class='table table-small'][1]/tbody/tr"):
             l = ItemLoader(item=NewsItem(), selector = row)
+            l.add_xpath('DateTime','td[1]')
             l.add_xpath("news", 'td[2]/a/text()')
                         
             yield l.load_item()
