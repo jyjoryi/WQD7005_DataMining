@@ -57,4 +57,11 @@ for i in range(0,len(news)):
     else:
         news['polarity_description'][i] = 'Neutral'
         
+news['polarity'] = pd.to_numeric(news['polarity'])
+news['DateTime'] = pd.to_datetime(news['DateTime'])
+
 news.to_csv('news_preprocessed.csv',index=False)
+
+polarity_mean = news.groupby('DateTime', as_index=False)['polarity'].mean()
+polarity_mean.rename(columns={'polarity':'polarity_mean'},inplace=True)
+polarity_mean.to_csv('polarity_mean.csv',index=False)
