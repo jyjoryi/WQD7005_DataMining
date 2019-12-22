@@ -1,0 +1,24 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Variable Summary
+
+            Measurement    Frequency
+Role           Level         Count
+
+INPUT        INTERVAL          4    
+REJECTED     BINARY            4    
+REJECTED     NOMINAL           4    
+REJECTED     ORDINAL           1    
+TIMEID       INTERVAL          1    
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+
+                                                                                                                                    apply_
+                                                                 length                                                             start_
+Obs      name            START           END    timeinterval    OfCycle    label    timeformat                        role          end         timeformattype
+
+ 1     date_text    28/10/2014    24/10/2019        DAY            7                DDMMYY10.0                        TIMEID        N                DATE     

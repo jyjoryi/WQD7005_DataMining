@@ -1,0 +1,856 @@
+*------------------------------------------------------------*
+* Score Log
+Date:                22 December 2019
+Time:                19:46:37 o'clock
+*------------------------------------------------------------*
+16639  %let EMEXCEPTIONSTRING=;
+16640  *------------------------------------------------------------*;
+16641  * SCORE: Tree;
+16642  *------------------------------------------------------------*;
+16643  %let EM_ACTION = SCORE;
+16644  %let syscc = 0;
+16645  %macro main;
+16646  
+16647    %if %upcase(&EM_ACTION) = CREATE %then %do;
+16648      filename temp catalog 'sashelp.emmodl.tree_create.source';
+16649      %include temp;
+16650      filename temp;
+16651  
+16652      %em_tree_create;
+16653    %end;
+16654  
+16655     %else
+16656     %if %upcase(&EM_ACTION) = TRAIN %then %do;
+16657  
+16658         filename temp catalog 'sashelp.emmodl.tree_train.source';
+16659         %include temp;
+16660         filename temp;
+16661         %em_tree_train;
+16662     %end;
+16663  
+16664    %else
+16665    %if %upcase(&EM_ACTION) = SCORE %then %do;
+16666      filename temp catalog 'sashelp.emmodl.tree_score.source';
+16667      %include temp;
+16668      filename temp;
+16669  
+16670      %em_tree_score;
+16671  
+16672    %end;
+16673  
+16674    %else
+16675    %if %upcase(&EM_ACTION) = REPORT %then %do;
+16676  
+16677         filename temp catalog 'sashelp.emmodl.tree_report.source';
+16678         %include temp;
+16679         filename temp;
+16680  
+16681         %em_tree_report;
+16682     %end;
+16683  
+16684    %else
+16685    %if %upcase(&EM_ACTION) = OPENINT %then %do;
+16686  
+16687         filename temp catalog 'sashelp.emmodl.tree_actions.source';
+16688         %include temp;
+16689         filename temp;
+16690         %EM_TREE_OPENTREEVIEWER;
+16691  
+16692     %end;
+16693  
+16694    %else
+16695    %if %upcase(&EM_ACTION) = CLOSEINT %then %do;
+16696  
+16697         filename temp catalog 'sashelp.emmodl.tree_actions.source';
+16698         %include temp;
+16699         filename temp;
+16700         %EM_TREE_CLOSETREEVIEWER;
+16701  
+16702     %end;
+16703  
+16704  
+16705     %doendm:
+16706  %mend main;
+16707  
+16708  %main;
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMMODL.TREE_SCORE.SOURCE.
+16710 +%macro em_tree_score;
+16712 +   /* determine if multiple targets will be processed */
+16713 +   %let em_tree_multipleTargets=N;
+16714 +   %let em_tree_numTarget=1;
+16715 +   %if "&EM_PROPERTY_USEMULTIPLETARGET" eq "Y" %then %do;
+16716 +      /* determine if there are any ordinal target variables - if so, multiple targets are not supported */
+16717 +      %if &EM_NUM_ORDINAL_TARGET gt 0 %then %do;
+16718 +         %let em_tree_multipleTargets=N;
+16719 +      %end;
+16720 +      %else %do;
+16721 +         /* create macro array of targets  */
+16722 +         data _null_;
+16723 +           set &EM_DATA_VARIABLESET(where=(ROLE='TARGET' AND LEVEL^='ORDINAL')) end=eof;
+16724 +           call symput('em_tree_targetVars'!!strip(put(_N_, BEST.)), strip(Name));
+16725 +           if eof then
+16726 +             call symput('em_tree_numTarget', strip(put(_N_, BEST.)));
+16727 +        run;
+16729 +        %if &em_tree_numTarget gt 1 %then %do;
+16730 +           %let em_tree_multipleTargets=Y;
+16731 +        %end;
+16732 +      %end;
+16733 +   %end;
+16735 +   /* build flow and publish scoring code */
+16736 +   %EM_GETNAME(key=TREEFLOW, type=FILE, extension=sas);
+16737 +   %EM_GETNAME(key=TREEPUBLISH, type=FILE, extension=sas);
+16739 +   filename treeflow "&EM_USER_TREEFLOW";
+16740 +   filename treepub "&EM_USER_TREEPUBLISH";
+16742 +   filename flowref  "&EM_FILE_EMFLOWSCORECODE";
+16743 +   filename pubref   "&EM_FILE_EMPUBLISHSCORECODE";
+16745 +   %em_copyfile(infref=treeflow, outfref=flowref);
+16746 +   %em_copyfile(infref=treepub, outfref=pubref);
+16748 +   filename treeflow;
+16749 +   filename treepub;
+16751 +   /* if priors are used, add code to generate unadjusted residuals in export */
+16752 +   %let useAdjPriors = N;
+16753 +   data _null_;
+16754 +     set &EM_DEC_DECMETA(where=(_TYPE_="DECPRIOR"));
+16755 +     if USE="Y" then call symput('useAdjPriors', 'Y');
+16756 +   run;
+16757 +   %if (("&em_tree_multipleTargets" eq "N") AND ("&useAdjPriors" eq "Y")) %then %do;
+16758 +      filename temp catalog 'sashelp.emutil.em_makeunadjustedresidualvars.source';
+16759 +      %include temp;
+16760 +      filename temp;
+16762 +      %EM_GETNAME(key=adjResidualCode, type=FILE, extension=sas);
+16763 +      filename adjref "&EM_USER_adjResidualCode";
+16764 +      %makeUnadjustedResidualVars(target=%EM_TARGET, decmeta=&EM_DEC_DECMETA, fref=adjref);
+16766 +      %em_copyfile(infref=adjref, outfref=flowref, append=Y);
+16768 +      filename adjref;
+16769 +   %end;
+16771 +   /* LEAF */
+16772 +   %if "&EM_PROPERTY_LEAFID" eq "Y" %then %do;
+16773 +      data _null_;
+16774 +        file flowref mod;
+16775 +        put 'drop _LEAF_;';
+16776 +      run;
+16778 +      data _null_;
+16779 +        file pubref mod;
+16780 +        put 'drop _LEAF_;';
+16781 +      run;
+16783 +   %end;
+16785 +   filename flowref;
+16786 +   filename pubref;
+16788 +   /* em_metachange code */
+16789 +   %if "&EM_PROPERTY_LEAFID" eq "Y" %then %do;
+16790 +     %EM_METACHANGE(name=_NODE_, role=&EM_PROPERTY_NODEROLE, LEVEL=NOMINAL);
+16791 +   %end;
+16793 +   /* variable selection based on importance stat    */
+16794 +   %if "&EM_PROPERTY_VARSELECTION" eq "Y" %then %do;
+16795 +     %EM_GETNAME(key=OUTIMPORT, type=DATA);
+16796 +     %let dsid = %sysfunc(open(&EM_USER_OUTIMPORT(where=(IMPORTANCE<0.05))));
+16797 +     %let varnum = %sysfunc(varnum(&dsid, NAME));
+16798 +     %let obs = %sysfunc(fetch(&dsid));
+16799 +     %do %while(&obs=0);
+16800 +       %let temp = %nrbquote(%sysfunc(getvarc(&dsid, &varnum)));
+16801 +       %let varname = %nrbquote(%sysfunc(tranwrd(&temp,  %str(%"),"")));
+16802 +       %EM_METACHANGE(name=&varname, role=REJECTED);
+16803 +       %let obs = %sysfunc(fetch(&dsid));
+16804 +     %end;
+16805 +     %if &dsid %then %let dsid=%sysfunc(close(&dsid));
+16806 +   %end;
+16808 +   /* set Q_ varaibles to role of ASSESS when in the presense of prior probabilities */
+16809 +   %if %sysfunc(exist(&EM_DEC_DECMETA)) %then %do;
+16810 +    %let tree_pred_vars = ;
+16811 +    %let tree_pred_lvl =;
+16812 +    %let numpred= 0;
+16814 +    data _null_;
+16815 +     set &EM_DEC_DECMETA(where=(_TYPE_="PREDICTED")) end=eof;
+16816 +     call symput('tree_pred_vars'!!strip(put(_N_, BEST.)), strip(VARIABLE));
+16817 +     call symput('tree_pred_lvl'!!strip(put(_N_, BEST.)), strip(LEVEL));
+16818 +     if eof then
+16819 +       call symput('numpred', strip(put(_N_, BEST.)));
+16820 +    run;
+16821 +   %end;
+16823 +   %if &numpred ne 0 %then %do;
+16824 +    %do i=1 %to &numpred;
+16825 +      %let qpred = Q%substr(&&tree_pred_vars&i,2);
+16826 +      %EM_METACHANGE(name=&qpred, role=ASSESS);
+16827 +    %end;
+16828 +   %end;
+16830 +   /* determine if multiple targets will be processed */
+16831 +   %let em_tree_multipleTargets=N;
+16832 +   %let em_tree_numTarget=1;
+16833 +   %if "&EM_PROPERTY_USEMULTIPLETARGET" eq "Y" %then %do;
+16834 +      /* determine if there are any ordinal target variables - if so, multiple targets are not supported */
+16835 +      %if &EM_NUM_ORDINAL_TARGET gt 0 %then %do;
+16836 +         %let em_tree_multipleTargets=N;
+16837 +      %end;
+16838 +      %else %do;
+16839 +        data _null_;
+16840 +          set &EM_DATA_VARIABLESET(where=(ROLE='TARGET' AND LEVEL^='ORDINAL')) end=eof;
+16841 +          if eof then
+16842 +            call symput('em_tree_numTarget', strip(put(_N_, BEST.)));
+16843 +        run;
+16845 +        %if &em_tree_numTarget gt 1 %then %do;
+16846 +           %let em_tree_multipleTargets=Y;
+16847 +        %end;
+16848 +     %end;
+16849 +   %end;
+16851 +   /* need to include this code to do the %em_report for OUTIMPORT here instead of in Report code so _loop data set is created when group processing */
+16852 +   %if "&em_tree_multipleTargets" eq "N" %then %do;
+16854 +      /* variable importance */
+16855 +      %EM_GETNAME(key=OUTIMPORT, type=DATA);
+16856 +      %if %sysfunc(exist(&EM_USER_OUTIMPORT)) eq 1 %then %do;
+16858 +         %let validexist=0;
+16859 +         %if (("&EM_IMPORT_VALIDATE" ne "") AND (%sysfunc(exist(&EM_IMPORT_VALIDATE)) or %sysfunc(exist(&EM_IMPORT_VALIDATE,VIEW)))) %then %do;
+16860 +           %let validexist=1;
+16861 +         %end;
+16863 +         /* determine if vars exists - properties could indicate they are they but freeze=Y would mean the node wasn't retrained */
+16864 +         /* and the columns may not be generated                                                                                 */
+16865 +         %let em_tree_cvexists=;
+16866 +         %let em_tree_surrexists=.;
+16867 +         data _null_;
+16868 +            set &EM_USER_OUTIMPORT (obs=2) end=eof;
+16869 +            if eof then do ;
+16870 +               call symput("em_tree_cvexists" , strip(put(cvimportance,best.))) ;
+16871 +               call symput("em_tree_surrexists", strip(put(nsurrogates, best.)));
+16872 +            end;
+16873 +         run;
+16875 +         data &EM_USER_OUTIMPORT;
+16876 +            set &EM_USER_OUTIMPORT;
+16878 +            /* format columns based on Precison value specified */
+16879 +            format importance 15.&EM_PROPERTY_PRECISION
+16880 +                 %if &validexist %then %do;
+16881 +                   vimportance ratio 15.&EM_PROPERTY_PRECISION
+16882 +                 %end;
+16883 +                 %if "&EM_TREE_CVEXISTS" ne "." %then %do;
+16884 +                   cvimportance vimportance ratio 15.&EM_PROPERTY_PRECISION
+16885 +                 %end;
+16886 +            ;
+16887 +            label  NAME       = "%sysfunc(sasmsg(sashelp.dmine, meta_name_vlabel, noquote))"
+16888 +                 LABEL        = "%sysfunc(sasmsg(sashelp.dmine, meta_label_vlabel, noquote))"
+16889 +                 NRULES       = "%sysfunc(sasmsg(sashelp.dmine, rpt_nrules_vlabel, noquote))"
+16890 +                 IMPORTANCE   = "%sysfunc(sasmsg(sashelp.dmine, rpt_importance_vlabel, noquote))"
+16891 +                 %if "&em_tree_surrexists" ne "" %then %do;
+16892 +                   NSURROGATES  = "%sysfunc(sasmsg(sashelp.dmine, rpt_nsurrogates_vlabel, noquote))"
+16893 +                 %end;
+16894 +                 %if &validexist %then %do;
+16895 +                   VIMPORTANCE = "%sysfunc(sasmsg(sashelp.dmine, rpt_vimportance_vlabel, noquote))"
+16896 +                   RATIO       = "%sysfunc(sasmsg(sashelp.dmine, rpt_ratio_vlabel, noquote))"
+16897 +                 %end;
+16898 +                 %if "&EM_TREE_CVEXISTS" ne "" %then %do;
+16899 +                   VIMPORTANCE = "%sysfunc(sasmsg(sashelp.dmine, rpt_vimportance_vlabel, noquote))"
+16900 +                   CVIMPORTANCE =  "%sysfunc(sasmsg(sashelp.dmine, rpt_cvimport_vlabel, noquote))"
+16901 +                   CVRULES= "%sysfunc(sasmsg(sashelp.dmine, rpt_cvrules_vlabel, noquote))"
+16902 +                   RATIO = "%sysfunc(sasmsg(sashelp.dmine, rpt_ratio_vlabel, noquote))"
+16903 +                 %end;
+16904 +            ;
+16905 +         run;
+16907 +         %EM_REPORT(key=OUTIMPORT, viewtype=DATA, block=MODEL, description=IMPORTANCE, autodisplay=N);
+16908 +      %end;
+16909 +   %end;
+16911 +   %doendm:
+16912 +%mend em_tree_score;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+
+NOTE: The file FLOWREF is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas,
+      RECFM=V,LRECL=20000,File Size (bytes)=0,
+      Last Modified=22 December 2019 19:46:37 o'clock,
+      Create Time=16 November 2019 21:47:40 o'clock
+
+NOTE: 117 records were written to the file FLOWREF.
+      The minimum record length was 1.
+      The maximum record length was 69.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: The file PUBREF is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMPUBLISHSCORE.sas,
+      RECFM=V,LRECL=20000,File Size (bytes)=0,
+      Last Modified=22 December 2019 19:46:37 o'clock,
+      Create Time=16 November 2019 21:47:40 o'clock
+
+NOTE: 90 records were written to the file PUBREF.
+      The minimum record length was 1.
+      The maximum record length was 65.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.03 seconds
+      
+
+NOTE: Fileref TREEFLOW has been deassigned.
+NOTE: Fileref TREEPUB has been deassigned.
+
+NOTE: There were 1 observations read from the data set EMWS1.TREE_TREND_DM.
+      WHERE _TYPE_='DECPRIOR';
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: The file FLOWREF is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas,
+      RECFM=V,LRECL=32767,File Size (bytes)=4411,
+      Last Modified=22 December 2019 19:46:37 o'clock,
+      Create Time=16 November 2019 21:47:40 o'clock
+
+NOTE: 1 record was written to the file FLOWREF.
+      The minimum record length was 12.
+      The maximum record length was 12.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: The file PUBREF is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMPUBLISHSCORE.sas,
+      RECFM=V,LRECL=32767,File Size (bytes)=3493,
+      Last Modified=22 December 2019 19:46:37 o'clock,
+      Create Time=16 November 2019 21:47:40 o'clock
+
+NOTE: 1 record was written to the file PUBREF.
+      The minimum record length was 12.
+      The maximum record length was 12.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+NOTE: Fileref FLOWREF has been deassigned.
+NOTE: Fileref PUBREF has been deassigned.
+
+NOTE: The data set WORK.EM_METACHANGE has 1 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: There were 1 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 2 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+      
+
+
+NOTE: There were 2 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 3 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 3 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 4 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 4 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 5 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 3 observations read from the data set EMWS1.TREE_TREND_DM.
+      WHERE _TYPE_='PREDICTED';
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: There were 5 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 6 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 6 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 7 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 7 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 8 observations and 9 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+      
+
+
+NOTE: Variable cvimportance is uninitialized.
+NOTE: Variable nsurrogates is uninitialized.
+NOTE: There were 2 observations read from the data set EMWS1.TREE_OUTIMPORT.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: Variable NSURROGATES is uninitialized.
+NOTE: Variable CVIMPORTANCE is uninitialized.
+NOTE: Variable CVRULES is uninitialized.
+NOTE: There were 6 observations read from the data set EMWS1.TREE_OUTIMPORT.
+NOTE: The data set EMWS1.TREE_OUTIMPORT has 6 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.25 seconds
+      cpu time            0.04 seconds
+      
+
+
+NOTE: The data set WORK.EM_USER_REPORT has 132 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+      
+
+16913  
+16914  *------------------------------------------------------------*;
+16915  * End SCORE: Tree;
+16916  *------------------------------------------------------------*;
+
+16917  proc sort data=WORK.EM_METACHANGE;
+16918  by key uname;
+16919  run;
+
+NOTE: There were 8 observations read from the data set WORK.EM_METACHANGE.
+NOTE: The data set WORK.EM_METACHANGE has 8 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+      
+
+16920  filename x "C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\CDELTA_TRAIN.sas";
+16921  data _null_;
+16922  file x;
+16923  put 'if upcase(NAME) = "ALL_DAY_MAINTAIN" then do;';
+16924  put 'ROLE = "REJECTED";';
+16925  put 'end;';
+16926  put 'else ';
+16927  put 'if upcase(NAME) = "CLOSING_AT_DAILY_LOW" then do;';
+16928  put 'ROLE = "REJECTED";';
+16929  put 'end;';
+16930  put 'else ';
+16931  put 'if upcase(NAME) = "DAY" then do;';
+16932  put 'ROLE = "REJECTED";';
+16933  put 'end;';
+16934  put 'else ';
+16935  put 'if upcase(NAME) = "MONTH" then do;';
+16936  put 'ROLE = "REJECTED";';
+16937  put 'end;';
+16938  put 'else ';
+16939  put 'if upcase(NAME) = "Q_TRENDDOWNWARD" then do;';
+16940  put 'ROLE = "ASSESS";';
+16941  put 'end;';
+16942  put 'else ';
+16943  put 'if upcase(NAME) = "Q_TRENDMAINTAIN" then do;';
+16944  put 'ROLE = "ASSESS";';
+16945  put 'end;';
+16946  put 'else ';
+16947  put 'if upcase(NAME) = "Q_TRENDUPWARD" then do;';
+16948  put 'ROLE = "ASSESS";';
+16949  put 'end;';
+16950  put 'else ';
+16951  put 'if upcase(NAME) = "_NODE_" then do;';
+16952  put 'ROLE = "SEGMENT";';
+16953  put 'LEVEL = "NOMINAL";';
+16954  put 'end;';
+16955  run;
+
+NOTE: The file X is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\CDELTA_TRAIN.sas,
+      RECFM=V,LRECL=32767,File Size (bytes)=0,
+      Last Modified=22 December 2019 19:46:38 o'clock,
+      Create Time=16 November 2019 21:47:40 o'clock
+
+NOTE: 32 records were written to the file X.
+      The minimum record length was 4.
+      The maximum record length was 49.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+      
+
+16956  filename x;
+NOTE: Fileref X has been deassigned.
+
+16957  filename emflow "C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas";
+16958  *------------------------------------------------------------*;
+16959  * Tree: Scoring DATA data;
+16960  *------------------------------------------------------------*;
+16961  data EMWS1.Tree_TRAIN
+16962  / view=EMWS1.Tree_TRAIN
+16963  ;
+16964  set EMWS1.Part_TRAIN
+16965  ;
+16966  %inc emflow;
+NOTE: %INCLUDE (level 1) file EMFLOW is file C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas.
+16967 +****************************************************************;
+16968 +******             DECISION TREE SCORING CODE             ******;
+16969 +****************************************************************;
+16970 +
+16971 +******         LENGTHS OF NEW CHARACTER VARIABLES         ******;
+16972 +LENGTH F_trend  $    8;
+16973 +LENGTH I_trend  $    8;
+16974 +LENGTH U_trend  $    8;
+16975 +LENGTH _WARN_  $    4;
+16976 +
+16977 +******              LABELS FOR NEW VARIABLES              ******;
+16978 +label _NODE_ = 'Node' ;
+16979 +label _LEAF_ = 'Leaf' ;
+16980 +label P_trendupward = 'Predicted: trend=upward' ;
+16981 +label P_trenddownward = 'Predicted: trend=downward' ;
+16982 +label P_trendmaintain = 'Predicted: trend=maintain' ;
+16983 +label Q_trendupward = 'Unadjusted P: trend=upward' ;
+16984 +label Q_trenddownward = 'Unadjusted P: trend=downward' ;
+16985 +label Q_trendmaintain = 'Unadjusted P: trend=maintain' ;
+16986 +label V_trendupward = 'Validated: trend=upward' ;
+16987 +label V_trenddownward = 'Validated: trend=downward' ;
+16988 +label V_trendmaintain = 'Validated: trend=maintain' ;
+16989 +label R_trendupward = 'Residual: trend=upward' ;
+16990 +label R_trenddownward = 'Residual: trend=downward' ;
+16991 +label R_trendmaintain = 'Residual: trend=maintain' ;
+16992 +label F_trend = 'From: trend' ;
+16993 +label I_trend = 'Into: trend' ;
+16994 +label U_trend = 'Unnormalized Into: trend' ;
+16995 +label _WARN_ = 'Warnings' ;
+16996 +
+16997 +
+16998 +******      TEMPORARY VARIABLES FOR FORMATTED VALUES      ******;
+16999 +LENGTH _ARBFMT_8 $      8; DROP _ARBFMT_8;
+17000 +_ARBFMT_8 = ' '; /* Initialize to avoid warning. */
+17001 +LENGTH _ARBFMT_12 $     12; DROP _ARBFMT_12;
+17002 +_ARBFMT_12 = ' '; /* Initialize to avoid warning. */
+17003 +
+17004 +
+17005 +_ARBFMT_8 = PUT( trend , $8.);
+17006 + %DMNORMCP( _ARBFMT_8, F_trend );
+17007 +
+17008 +******             ASSIGN OBSERVATION TO NODE             ******;
+17009 +_ARBFMT_12 = PUT( open_equals_closing , BEST12.);
+17010 + %DMNORMIP( _ARBFMT_12);
+17011 +IF _ARBFMT_12 IN ('1' ) THEN DO;
+17012 +  _NODE_  =                    2;
+17013 +  _LEAF_  =                    1;
+17014 +  P_trendupward  =     0.13618677042801;
+17015 +  P_trenddownward  =     0.11284046692607;
+17016 +  P_trendmaintain  =     0.75097276264591;
+17017 +  Q_trendupward  =     0.13618677042801;
+17018 +  Q_trenddownward  =     0.11284046692607;
+17019 +  Q_trendmaintain  =     0.75097276264591;
+17020 +  V_trendupward  =     0.15969581749049;
+17021 +  V_trenddownward  =     0.10646387832699;
+17022 +  V_trendmaintain  =      0.7338403041825;
+17023 +  I_trend  = 'MAINTAIN' ;
+17024 +  U_trend  = 'maintain' ;
+17025 +  END;
+17026 +ELSE DO;
+17027 +  _ARBFMT_12 = PUT( closing_at_daily_high , BEST12.);
+17028 +   %DMNORMIP( _ARBFMT_12);
+17029 +  IF _ARBFMT_12 IN ('1' ) THEN DO;
+17030 +    _NODE_  =                    6;
+17031 +    _LEAF_  =                    2;
+17032 +    P_trendupward  =     0.86206896551724;
+17033 +    P_trenddownward  =     0.06896551724137;
+17034 +    P_trendmaintain  =     0.06896551724137;
+17035 +    Q_trendupward  =     0.86206896551724;
+17036 +    Q_trenddownward  =     0.06896551724137;
+17037 +    Q_trendmaintain  =     0.06896551724137;
+17038 +    V_trendupward  =      0.9078947368421;
+17039 +    V_trenddownward  =     0.07894736842105;
+17040 +    V_trendmaintain  =     0.01315789473684;
+17041 +    I_trend  = 'UPWARD' ;
+17042 +    U_trend  = 'upward' ;
+17043 +    END;
+17044 +  ELSE DO;
+17045 +    _NODE_  =                    7;
+17046 +    _LEAF_  =                    3;
+17047 +    P_trendupward  =     0.45791245791245;
+17048 +    P_trenddownward  =     0.54208754208754;
+17049 +    P_trendmaintain  =                    0;
+17050 +    Q_trendupward  =     0.45791245791245;
+17051 +    Q_trenddownward  =     0.54208754208754;
+17052 +    Q_trendmaintain  =                    0;
+17053 +    V_trendupward  =      0.4295652173913;
+17054 +    V_trenddownward  =     0.56173913043478;
+17055 +    V_trendmaintain  =     0.00869565217391;
+17056 +    I_trend  = 'DOWNWARD' ;
+17057 +    U_trend  = 'downward' ;
+17058 +    END;
+17059 +  END;
+17060 +
+17061 +*****  RESIDUALS R_ *************;
+17062 +IF  F_trend  NE 'UPWARD'
+17063 +AND F_trend  NE 'DOWNWARD'
+17064 +AND F_trend  NE 'MAINTAIN'  THEN DO;
+17065 +        R_trendupward  = .;
+17066 +        R_trenddownward  = .;
+17067 +        R_trendmaintain  = .;
+17068 + END;
+17069 + ELSE DO;
+17070 +       R_trendupward  =  -P_trendupward ;
+17071 +       R_trenddownward  =  -P_trenddownward ;
+17072 +       R_trendmaintain  =  -P_trendmaintain ;
+17073 +       SELECT( F_trend  );
+17074 +          WHEN( 'UPWARD'  ) R_trendupward  = R_trendupward  +1;
+17075 +          WHEN( 'DOWNWARD'  ) R_trenddownward  = R_trenddownward  +1;
+17076 +          WHEN( 'MAINTAIN'  ) R_trendmaintain  = R_trendmaintain  +1;
+17077 +       END;
+17078 + END;
+17079 +
+17080 +****************************************************************;
+17081 +******          END OF DECISION TREE SCORING CODE         ******;
+17082 +****************************************************************;
+17083 +
+17084 +drop _LEAF_;
+NOTE: %INCLUDE (level 1) ending.
+17085  run;
+
+NOTE: DATA STEP view saved on file EMWS1.TREE_TRAIN.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.04 seconds
+      
+
+17086  quit;
+17087  filename emflow;
+NOTE: Fileref EMFLOW has been deassigned.
+
+17088  filename emflow "C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas";
+17089  *------------------------------------------------------------*;
+17090  * Tree: Scoring VALIDATE data;
+17091  *------------------------------------------------------------*;
+17092  data EMWS1.Tree_VALIDATE
+17093  / view=EMWS1.Tree_VALIDATE
+17094  ;
+17095  set EMWS1.Part_VALIDATE
+17096  ;
+17097  %inc emflow;
+NOTE: %INCLUDE (level 1) file EMFLOW is file C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Tree\EMFLOWSCORE.sas.
+17098 +****************************************************************;
+17099 +******             DECISION TREE SCORING CODE             ******;
+17100 +****************************************************************;
+17101 +
+17102 +******         LENGTHS OF NEW CHARACTER VARIABLES         ******;
+17103 +LENGTH F_trend  $    8;
+17104 +LENGTH I_trend  $    8;
+17105 +LENGTH U_trend  $    8;
+17106 +LENGTH _WARN_  $    4;
+17107 +
+17108 +******              LABELS FOR NEW VARIABLES              ******;
+17109 +label _NODE_ = 'Node' ;
+17110 +label _LEAF_ = 'Leaf' ;
+17111 +label P_trendupward = 'Predicted: trend=upward' ;
+17112 +label P_trenddownward = 'Predicted: trend=downward' ;
+17113 +label P_trendmaintain = 'Predicted: trend=maintain' ;
+17114 +label Q_trendupward = 'Unadjusted P: trend=upward' ;
+17115 +label Q_trenddownward = 'Unadjusted P: trend=downward' ;
+17116 +label Q_trendmaintain = 'Unadjusted P: trend=maintain' ;
+17117 +label V_trendupward = 'Validated: trend=upward' ;
+17118 +label V_trenddownward = 'Validated: trend=downward' ;
+17119 +label V_trendmaintain = 'Validated: trend=maintain' ;
+17120 +label R_trendupward = 'Residual: trend=upward' ;
+17121 +label R_trenddownward = 'Residual: trend=downward' ;
+17122 +label R_trendmaintain = 'Residual: trend=maintain' ;
+17123 +label F_trend = 'From: trend' ;
+17124 +label I_trend = 'Into: trend' ;
+17125 +label U_trend = 'Unnormalized Into: trend' ;
+17126 +label _WARN_ = 'Warnings' ;
+17127 +
+17128 +
+17129 +******      TEMPORARY VARIABLES FOR FORMATTED VALUES      ******;
+17130 +LENGTH _ARBFMT_8 $      8; DROP _ARBFMT_8;
+17131 +_ARBFMT_8 = ' '; /* Initialize to avoid warning. */
+17132 +LENGTH _ARBFMT_12 $     12; DROP _ARBFMT_12;
+17133 +_ARBFMT_12 = ' '; /* Initialize to avoid warning. */
+17134 +
+17135 +
+17136 +_ARBFMT_8 = PUT( trend , $8.);
+17137 + %DMNORMCP( _ARBFMT_8, F_trend );
+17138 +
+17139 +******             ASSIGN OBSERVATION TO NODE             ******;
+17140 +_ARBFMT_12 = PUT( open_equals_closing , BEST12.);
+17141 + %DMNORMIP( _ARBFMT_12);
+17142 +IF _ARBFMT_12 IN ('1' ) THEN DO;
+17143 +  _NODE_  =                    2;
+17144 +  _LEAF_  =                    1;
+17145 +  P_trendupward  =     0.13618677042801;
+17146 +  P_trenddownward  =     0.11284046692607;
+17147 +  P_trendmaintain  =     0.75097276264591;
+17148 +  Q_trendupward  =     0.13618677042801;
+17149 +  Q_trenddownward  =     0.11284046692607;
+17150 +  Q_trendmaintain  =     0.75097276264591;
+17151 +  V_trendupward  =     0.15969581749049;
+17152 +  V_trenddownward  =     0.10646387832699;
+17153 +  V_trendmaintain  =      0.7338403041825;
+17154 +  I_trend  = 'MAINTAIN' ;
+17155 +  U_trend  = 'maintain' ;
+17156 +  END;
+17157 +ELSE DO;
+17158 +  _ARBFMT_12 = PUT( closing_at_daily_high , BEST12.);
+17159 +   %DMNORMIP( _ARBFMT_12);
+17160 +  IF _ARBFMT_12 IN ('1' ) THEN DO;
+17161 +    _NODE_  =                    6;
+17162 +    _LEAF_  =                    2;
+17163 +    P_trendupward  =     0.86206896551724;
+17164 +    P_trenddownward  =     0.06896551724137;
+17165 +    P_trendmaintain  =     0.06896551724137;
+17166 +    Q_trendupward  =     0.86206896551724;
+17167 +    Q_trenddownward  =     0.06896551724137;
+17168 +    Q_trendmaintain  =     0.06896551724137;
+17169 +    V_trendupward  =      0.9078947368421;
+17170 +    V_trenddownward  =     0.07894736842105;
+17171 +    V_trendmaintain  =     0.01315789473684;
+17172 +    I_trend  = 'UPWARD' ;
+17173 +    U_trend  = 'upward' ;
+17174 +    END;
+17175 +  ELSE DO;
+17176 +    _NODE_  =                    7;
+17177 +    _LEAF_  =                    3;
+17178 +    P_trendupward  =     0.45791245791245;
+17179 +    P_trenddownward  =     0.54208754208754;
+17180 +    P_trendmaintain  =                    0;
+17181 +    Q_trendupward  =     0.45791245791245;
+17182 +    Q_trenddownward  =     0.54208754208754;
+17183 +    Q_trendmaintain  =                    0;
+17184 +    V_trendupward  =      0.4295652173913;
+17185 +    V_trenddownward  =     0.56173913043478;
+17186 +    V_trendmaintain  =     0.00869565217391;
+17187 +    I_trend  = 'DOWNWARD' ;
+17188 +    U_trend  = 'downward' ;
+17189 +    END;
+17190 +  END;
+17191 +
+17192 +*****  RESIDUALS R_ *************;
+17193 +IF  F_trend  NE 'UPWARD'
+17194 +AND F_trend  NE 'DOWNWARD'
+17195 +AND F_trend  NE 'MAINTAIN'  THEN DO;
+17196 +        R_trendupward  = .;
+17197 +        R_trenddownward  = .;
+17198 +        R_trendmaintain  = .;
+17199 + END;
+17200 + ELSE DO;
+17201 +       R_trendupward  =  -P_trendupward ;
+17202 +       R_trenddownward  =  -P_trenddownward ;
+17203 +       R_trendmaintain  =  -P_trendmaintain ;
+17204 +       SELECT( F_trend  );
+17205 +          WHEN( 'UPWARD'  ) R_trendupward  = R_trendupward  +1;
+17206 +          WHEN( 'DOWNWARD'  ) R_trenddownward  = R_trenddownward  +1;
+17207 +          WHEN( 'MAINTAIN'  ) R_trendmaintain  = R_trendmaintain  +1;
+17208 +       END;
+17209 + END;
+17210 +
+17211 +****************************************************************;
+17212 +******          END OF DECISION TREE SCORING CODE         ******;
+17213 +****************************************************************;
+17214 +
+17215 +drop _LEAF_;
+NOTE: %INCLUDE (level 1) ending.
+17216  run;
+
+NOTE: DATA STEP view saved on file EMWS1.TREE_VALIDATE.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+      
+
+17217  quit;
+17218  filename emflow;
+NOTE: Fileref EMFLOW has been deassigned.
+
+NOTE: View EMWS1.TREE_TRAIN.VIEW used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.04 seconds
+      
+17220  proc sort data=WORK.EM_USER_REPORT;
+17221  by ID VIEW;
+17222  run;
+
+NOTE: There were 132 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 132 observations and 4 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+      
+
+17223  *------------------------------------------------------------*;
+17224  * Tree: Computing metadata for TRAIN data;
+17225  *------------------------------------------------------------*;
+
+NOTE: View EMWS1.TREE_TRAIN.VIEW used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.06 seconds
+      
+17606  data WORK.MODELTEMP_INFO;
+17607  set EMWS1.Tree_EMINFO;
+17608  where DATA='Tree' and KEY ^in('DECDATA', 'DECMETA', 'IMPORTANCE', 'MODEL');
+17609  run;
+
+NOTE: There were 0 observations read from the data set EMWS1.TREE_EMINFO.
+      WHERE (DATA='Tree') and KEY not in ('DECDATA', 'DECMETA', 'IMPORTANCE', 'MODEL');
+NOTE: The data set WORK.MODELTEMP_INFO has 0 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+17610  data EMWS1.Tree_EMINFO;
+17611  length TARGET KEY $32 DATA $43;
+17612  input TARGET KEY DATA $;
+17613  cards;
+
+NOTE: The data set EMWS1.TREE_EMINFO has 3 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+      
+
+17617  run;
+17618  data EMWS1.Tree_EMINFO;
+17619  set EMWS1.Tree_EMINFO WORK.MODELTEMP_INFO;
+17620  run;
+
+NOTE: There were 3 observations read from the data set EMWS1.TREE_EMINFO.
+NOTE: There were 0 observations read from the data set WORK.MODELTEMP_INFO.
+NOTE: The data set EMWS1.TREE_EMINFO has 3 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+      
+
+17621  proc sort data = EMWS1.Tree_EMINFO NOTHREADS;
+17622  by TARGET KEY;
+17623  run;
+
+NOTE: There were 3 observations read from the data set EMWS1.TREE_EMINFO.
+NOTE: The data set EMWS1.TREE_EMINFO has 3 observations and 3 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+      
+
+NOTE: View EMWS1.TREE_TRAIN.VIEW used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.03 seconds
+      
+NOTE: View EMWS1.TREE_VALIDATE.VIEW used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.03 seconds
+      

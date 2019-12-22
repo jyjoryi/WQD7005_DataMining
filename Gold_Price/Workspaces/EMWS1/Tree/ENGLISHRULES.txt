@@ -1,0 +1,35 @@
+*------------------------------------------------------------*
+ Node = 2
+*------------------------------------------------------------*
+if open_equals_closing IS ONE OF: 1
+then 
+ Tree Node Identifier   = 2
+ Number of Observations = 257
+ Predicted: trend=upward = 0.14
+ Predicted: trend=maintain = 0.75
+ Predicted: trend=downward = 0.11
+ 
+*------------------------------------------------------------*
+ Node = 6
+*------------------------------------------------------------*
+if open_equals_closing IS ONE OF: 0 or MISSING
+AND closing_at_daily_high IS ONE OF: 1
+then 
+ Tree Node Identifier   = 6
+ Number of Observations = 58
+ Predicted: trend=upward = 0.86
+ Predicted: trend=maintain = 0.07
+ Predicted: trend=downward = 0.07
+ 
+*------------------------------------------------------------*
+ Node = 7
+*------------------------------------------------------------*
+if open_equals_closing IS ONE OF: 0 or MISSING
+AND closing_at_daily_high IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 7
+ Number of Observations = 594
+ Predicted: trend=upward = 0.46
+ Predicted: trend=maintain = 0.00
+ Predicted: trend=downward = 0.54
+ 

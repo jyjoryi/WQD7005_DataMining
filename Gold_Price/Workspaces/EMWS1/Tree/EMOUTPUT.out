@@ -1,0 +1,246 @@
+*------------------------------------------------------------*
+User:                tan.joryi
+Date:                22 December 2019
+Time:                19:46:53 o'clock
+*------------------------------------------------------------*
+* Training Output
+*------------------------------------------------------------*
+ 
+ 
+ 
+ 
+Variable Summary
+ 
+            Measurement    Frequency
+Role           Level         Count
+ 
+ID           INTERVAL          1
+INPUT        BINARY            4
+INPUT        NOMINAL           2
+REJECTED     INTERVAL          4
+REJECTED     NOMINAL           1
+REJECTED     ORDINAL           1
+TARGET       NOMINAL           1
+TIMEID       INTERVAL          1
+ 
+ 
+ 
+ 
+Model Events
+ 
+                                   Number
+                    Measurement      of
+Target    Event        Level       Levels      Order       Label
+ 
+trend     UPWARD      NOMINAL         3      Descending
+ 
+ 
+ 
+ 
+Predicted and decision variables
+ 
+Type         Variable           Label
+ 
+TARGET       trend
+PREDICTED    P_trendupward      Predicted: trend=upward
+RESIDUAL     R_trendupward      Residual: trend=upward
+PREDICTED    P_trendmaintain    Predicted: trend=maintain
+RESIDUAL     R_trendmaintain    Residual: trend=maintain
+PREDICTED    P_trenddownward    Predicted: trend=downward
+RESIDUAL     R_trenddownward    Residual: trend=downward
+FROM         F_trend            From: trend
+INTO         I_trend            Into: trend
+
+
+*------------------------------------------------------------*
+* Score Output
+*------------------------------------------------------------*
+
+
+*------------------------------------------------------------*
+* Report Output
+*------------------------------------------------------------*
+ 
+ 
+ 
+Variable Importance
+ 
+                                                                                            Ratio of
+                                  Number of                                               Validation
+                                  Splitting                            Validation        to Training
+    Variable Name        Label      Rules           Importance         Importance         Importance
+ 
+open_equals_closing                   1                 1.0000             1.0000             1.0000
+closing_at_daily_high                 1                 0.3673             0.4502             1.2256
+ 
+ 
+ 
+Tree Leaf Report
+ 
+                                 Training                    Validation
+Node               Training       Percent     Validation       Percent
+ Id     Depth    Observations     UPWARD     Observations      UPWARD
+ 
+  7       2           594          0.46           575           0.43
+  2       1           257          0.14           263           0.16
+  6       2            58          0.86            76           0.91
+ 
+ 
+ 
+ 
+Fit Statistics
+ 
+Target=trend Target Label=' '
+ 
+   Fit
+Statistics    Statistics Label                Train    Validation
+ 
+  _NOBS_      Sum of Frequencies             909.00       914.00
+  _MISC_      Misclassification Rate           0.38         0.36
+  _MAX_       Maximum Absolute Error           0.93         1.00
+  _SSE_       Sum of Squared Errors          413.26       413.33
+  _ASE_       Average Squared Error            0.15         0.15
+  _RASE_      Root Average Squared Error       0.39         0.39
+  _DIV_       Divisor for ASE               2727.00      2742.00
+  _DFT_       Total Degrees of Freedom      1818.00          .
+ 
+ 
+ 
+ 
+Classification Table
+ 
+Data Role=TRAIN Target Variable=trend Target Label=' '
+ 
+                          Target        Outcome     Frequency       Total
+ Target     Outcome     Percentage    Percentage      Count      Percentage
+ 
+DOWNWARD    DOWNWARD      54.2088       90.7042        322         35.4235
+UPWARD      DOWNWARD      45.7912       76.1905        272         29.9230
+DOWNWARD    MAINTAIN      11.2840        8.1690         29          3.1903
+MAINTAIN    MAINTAIN      75.0973       97.9695        193         21.2321
+UPWARD      MAINTAIN      13.6187        9.8039         35          3.8504
+DOWNWARD    UPWARD         6.8966        1.1268          4          0.4400
+MAINTAIN    UPWARD         6.8966        2.0305          4          0.4400
+UPWARD      UPWARD        86.2069       14.0056         50          5.5006
+ 
+ 
+Data Role=VALIDATE Target Variable=trend Target Label=' '
+ 
+                          Target        Outcome     Frequency       Total
+ Target     Outcome     Percentage    Percentage      Count      Percentage
+ 
+DOWNWARD    DOWNWARD      56.1739       90.4762        323         35.3392
+MAINTAIN    DOWNWARD       0.8696        2.5126          5          0.5470
+UPWARD      DOWNWARD      42.9565       68.9944        247         27.0241
+DOWNWARD    MAINTAIN      10.6464        7.8431         28          3.0635
+MAINTAIN    MAINTAIN      73.3840       96.9849        193         21.1160
+UPWARD      MAINTAIN      15.9696       11.7318         42          4.5952
+DOWNWARD    UPWARD         7.8947        1.6807          6          0.6565
+MAINTAIN    UPWARD         1.3158        0.5025          1          0.1094
+UPWARD      UPWARD        90.7895       19.2737         69          7.5492
+ 
+ 
+ 
+ 
+Event Classification Table
+ 
+Data Role=TRAIN Target=trend Target Label=' '
+ 
+  False       True        False       True
+Negative    Negative    Positive    Positive
+ 
+   307         544          8          50
+ 
+ 
+Data Role=VALIDATE Target=trend Target Label=' '
+ 
+  False       True        False       True
+Negative    Negative    Positive    Positive
+ 
+   289         549          7          69
+ 
+ 
+ 
+ 
+Assessment Score Rankings
+ 
+Data Role=TRAIN Target Variable=trend Target Label=' '
+ 
+                                                                                    Mean
+                            Cumulative       %      Cumulative     Number of     Posterior
+Depth      Gain     Lift       Lift      Response   % Response   Observations   Probability
+ 
+   5    119.502   2.19502     2.19502     86.2069     86.2069         46          0.86207
+  10     82.184   1.44036     1.82184     56.5688     71.5507         45          0.56569
+  15     60.161   1.16595     1.60161     45.7912     62.9015         46          0.45791
+  20     49.389   1.16595     1.49389     45.7912     58.6710         45          0.45791
+  25     42.773   1.16595     1.42773     45.7912     56.0724         46          0.45791
+  30     38.458   1.16595     1.38458     45.7912     54.3777         45          0.45791
+  35     35.305   1.16595     1.35305     45.7912     53.1395         46          0.45791
+  40     32.992   1.16595     1.32992     45.7912     52.2311         45          0.45791
+  45     31.152   1.16595     1.31152     45.7912     51.5086         46          0.45791
+  50     29.712   1.16595     1.29712     45.7912     50.9431         45          0.45791
+  55     28.532   1.16595     1.28532     45.7912     50.4795         45          0.45791
+  60     27.526   1.16595     1.27526     45.7912     50.0845         46          0.45791
+  65     26.694   1.16595     1.26694     45.7912     49.7576         45          0.45791
+  70     25.964   1.16595     1.25964     45.7912     49.4712         46          0.45791
+  75     21.743   0.61982     1.21743     24.3429     47.8131         45          0.24343
+  80     16.241   0.34676     1.16241     13.6187     45.6525         46          0.13619
+  85     11.493   0.34676     1.11493     13.6187     43.7877         45          0.13619
+  90      7.178   0.34676     1.07178     13.6187     42.0932         46          0.13619
+  95      3.402   0.34676     1.03402     13.6187     40.6101         45          0.13619
+ 100      0.000   0.34676     1.00000     13.6187     39.2739         45          0.13619
+ 
+ 
+Data Role=VALIDATE Target Variable=trend Target Label=' '
+ 
+                                                                                    Mean
+                            Cumulative       %      Cumulative     Number of     Posterior
+Depth      Gain     Lift       Lift      Response   % Response   Observations   Probability
+ 
+   5    131.792   2.31792     2.31792     90.7895     90.7895         46          0.86207
+  10    110.554   1.89315     2.10554     74.1519     82.4707         46          0.72149
+  15     76.926   1.09671     1.76926     42.9565     69.2993         46          0.45791
+  20     60.388   1.09671     1.60388     42.9565     62.8216         45          0.45791
+  25     50.200   1.09671     1.50200     42.9565     58.8312         46          0.45791
+  30     43.421   1.09671     1.43421     42.9565     56.1758         46          0.45791
+  35     38.675   1.09671     1.38675     42.9565     54.3168         45          0.45791
+  40     35.030   1.09671     1.35030     42.9565     52.8890         46          0.45791
+  45     32.198   1.09671     1.32198     42.9565     51.7801         46          0.45791
+  50     29.980   1.09671     1.29980     42.9565     50.9112         45          0.45791
+  55     28.123   1.09671     1.28123     42.9565     50.1838         46          0.45791
+  60     26.577   1.09671     1.26577     42.9565     49.5782         46          0.45791
+  65     25.270   1.09671     1.25270     42.9565     49.0663         46          0.45791
+  70     24.173   1.09671     1.24173     42.9565     48.6367         45          0.45791
+  75     19.685   0.57247     1.19685     22.4230     46.8789         46          0.21312
+  80     14.726   0.40772     1.14726     15.9696     44.9365         46          0.13619
+  85     10.443   0.40772     1.10443     15.9696     43.2589         45          0.13619
+  90      6.549   0.40772     1.06549     15.9696     41.7336         46          0.13619
+  95      3.067   0.40772     1.03067     15.9696     40.3698         46          0.13619
+ 100      0.000   0.40772     1.00000     15.9696     39.1685         45          0.13619
+ 
+ 
+ 
+ 
+Assessment Score Distribution
+ 
+Data Role=TRAIN Target Variable=trend Target Label=' '
+ 
+ Posterior     Number                     Mean
+Probability      of      Number of     Posterior
+   Range       Events    Nonevents    Probability    Percentage
+ 
+ 0.85-0.90        50          8         0.86207         6.3806
+ 0.45-0.50       272        322         0.45791        65.3465
+ 0.10-0.15        35        222         0.13619        28.2728
+ 
+ 
+Data Role=VALIDATE Target Variable=trend Target Label=' '
+ 
+ Posterior     Number                     Mean
+Probability      of      Number of     Posterior
+   Range       Events    Nonevents    Probability    Percentage
+ 
+ 0.85-0.90        69          7         0.86207         8.3151
+ 0.45-0.50       247        328         0.45791        62.9103
+ 0.10-0.15        42        221         0.13619        28.7746

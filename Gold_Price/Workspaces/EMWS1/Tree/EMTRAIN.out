@@ -1,0 +1,45 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Variable Summary
+
+            Measurement    Frequency
+Role           Level         Count
+
+ID           INTERVAL          1    
+INPUT        BINARY            4    
+INPUT        NOMINAL           2    
+REJECTED     INTERVAL          4    
+REJECTED     NOMINAL           1    
+REJECTED     ORDINAL           1    
+TARGET       NOMINAL           1    
+TIMEID       INTERVAL          1    
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Model Events
+
+                                   Number
+                    Measurement      of
+Target    Event        Level       Levels      Order       Label
+
+trend     UPWARD      NOMINAL         3      Descending         
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Predicted and decision variables
+
+Type         Variable           Label
+
+TARGET       trend                                       
+PREDICTED    P_trendupward      Predicted: trend=upward  
+RESIDUAL     R_trendupward      Residual: trend=upward   
+PREDICTED    P_trendmaintain    Predicted: trend=maintain
+RESIDUAL     R_trendmaintain    Residual: trend=maintain 
+PREDICTED    P_trenddownward    Predicted: trend=downward
+RESIDUAL     R_trenddownward    Residual: trend=downward 
+FROM         F_trend            From: trend              
+INTO         I_trend            Into: trend              

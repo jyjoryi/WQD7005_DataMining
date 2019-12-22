@@ -1,0 +1,2563 @@
+*------------------------------------------------------------*
+* Score Log
+Date:                22 December 2019
+Time:                20:01:51 o'clock
+*------------------------------------------------------------*
+18145  %let EMEXCEPTIONSTRING=;
+18146  *------------------------------------------------------------*;
+18147  * SCORE: TSESM;
+18148  *------------------------------------------------------------*;
+18149  %let EM_ACTION = SCORE;
+18150  %let syscc = 0;
+18151  
+18152  %macro EM_TSESM_MAIN;
+18153  
+18154     filename temp catalog 'sashelp.emtsdm.tsesm_macros.source';
+18155     %include temp;
+18156     filename temp catalog 'sashelp.emtsdm.tsutility_macros.source';
+18157     %include temp;
+18158     filename temp;
+18159  
+18160     %if %upcase(&EM_ACTION) = CREATE %then %do;
+18161         filename temp catalog 'sashelp.emtsdm.tsesm_create.source';
+18162         %include temp;
+18163         filename temp;
+18164         %EM_TSESM_CREATE;
+18165     %end;
+18166     %else
+18167     %if %upcase(&EM_ACTION) = TRAIN %then %do;
+18168          filename temp catalog 'sashelp.emtsdm.tsesm_train.source';
+18169             %include temp;
+18170             filename temp;
+18171          %EM_TSESM_TRAIN;
+18172     %end;
+18173     %else
+18174     %if %upcase(&EM_ACTION) = SCORE %then %do;
+18175             filename temp catalog 'sashelp.emtsdm.tsesm_score.source';
+18176             %include temp;
+18177             filename temp;
+18178           %EM_TSESM_SCORE;
+18179     %end;
+18180     %else
+18181     %if %upcase(&EM_ACTION) = REPORT %then %do;
+18182             filename temp catalog 'sashelp.emtsdm.tsesm_report.source';
+18183             %include temp;
+18184             filename temp;
+18185            %EM_TSESM_REPORT;
+18186     %end;
+18187  %mend EM_TSESM_MAIN;
+18188  %EM_TSESM_MAIN;
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMTSDM.TSESM_MACROS.SOURCE.
+18189 +/*----------------------------------------------------------------------------------+
+18190 + |
+18191 + |   Title :  Time Series data Mining Forcating Macros
+18192 + |
+18193 + |   SUPPORT: Ruiwen Zhang (Ruiwen.Zhang@sas.com)
+18194 + |
+18195 + |
+18196 + +-----------------------------------------------------------------------------------*/
+18199 +%macro EM_TSESM_Forecast(indata=,
+18200 +                method=,
+18201 +                timeinterval=,
+18202 +                timeid= ,
+18203 +                target= ,
+18204 +                tsidvar=,
+18205 +                lead=,
+18206 +                back=,
+18207 +                startsum=,
+18208 +                accumulate=,
+18209 +                seasonality=,
+18210 +                alpha=,
+18211 +                extendedvalue=,
+18212 +                outest = ,
+18213 +                outdata = ,
+18214 +                outfor = ,
+18215 +                outstat = ,
+18216 +                outsum=
+18217 +   );
+18220 +   %if &tsidvar eq _SEGMENT_ %then %do;
+18221 +       proc sort data=&indata out=_tmpdata;
+18222 +            by  &tsidvar %EM_CROSSID &timeid ;
+18223 +       run;
+18224 +       proc timeseries  data =_tmpdata out=_tmpdata;
+18225 +            by  &tsidvar %EM_CROSSID;
+18226 +            id &timeid interval=&timeinterval accumulate=&accumulate;
+18227 +            var &target / ;
+18228 +       run;
+18229 +       proc esm data =_tmpdata
+18230 +   %end;
+18231 +   %else %do;
+18232 +       proc sort data= &indata out=_tmpdata;
+18233 +            by  &tsidvar %EM_CROSSID &timeid ;
+18234 +       run;
+18235 +       proc esm data = _tmpdata
+18236 +   %end;
+18237 +            lead=&lead  back=&back startsum=&startsum
+18239 +   %if &seasonality ne DEFAULT %then %do;
+18240 +            seasonality = &seasonality
+18241 +   %end;
+18244 +            out=&outdata
+18245 +            outest=&outest
+18246 +            outfor =&outfor
+18247 +            outstat=&outstat
+18248 +            outsum= &outsum
+18249 +       ;
+18250 +        id &timeid  interval = &timeinterval   accumulate=&accumulate ;
+18252 +        %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+18253 +            %if &target ne %then %do;
+18254 +            forecast &target   /  model = none alpha=&alpha;
+18255 +            %end;
+18256 +            %if %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED ne %then %do;
+18257 +            forecast %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED /  model = &method alpha=&alpha use=&extendedvalue;
+18258 +            %end;
+18259 +        %end;
+18260 +        %else %if &EM_PROPERTY_EXPORTDATA eq DEFAULT %then %do;
+18261 +            %if &target ne %then %do;
+18262 +            forecast &target /  model =&method alpha=&alpha;
+18263 +            %end;
+18264 +            %if %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED ne %then %do;
+18265 +            forecast %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED/  model = none alpha=&alpha;
+18266 +            %end;
+18267 +        %end;
+18268 +        %else %do; /* for KLD, FORECAST Cluster , SIMILARITY */
+18269 +            forecast &target /*%EM_INTERVAL_INPUT*/ /  model = &method alpha=&alpha use=predict;
+18270 +        %end;
+18272 +   %if &tsidvar ne %then %do;
+18273 +        by &tsidvar %EM_CROSSID ;
+18274 +   %end;
+18275 +   run;
+18276 +%mend EM_TSESM_Forecast;
+18279 +%macro EM_TSESM_CreateOutFor(indata=,
+18280 +                            target=,
+18281 +                            timeid=,
+18282 +                            tsidVar=,
+18283 +                            percent=,
+18284 +                            outdata=);
+18286 +  %let lowerBound = L&percent;
+18287 +  %let upperBound = U&percent;
+18289 +  data ds_fore(rename=(&target=FORECAST)  drop=_TYPE_)
+18290 +       ds_resid(rename=(&target=RESIDUAL) drop=_TYPE_)
+18291 +       ds_act(rename=(&target=ACTUAL) drop=_TYPE_)
+18292 +       ds_lower(rename=(&target=LBOUND)  drop=_TYPE_)
+18293 +       ds_upper(rename=(&target=UBOUND) drop=_TYPE_)
+18294 +       ds_std(rename=(&target=STD) drop=_TYPE_);
+18295 +     set &indata;
+18296 +       if _TYPE_="FORECAST" then output ds_fore;
+18297 +       if _TYPE_="RESIDUAL" then output ds_resid;
+18298 +       if _TYPE_="ACTUAL" then output ds_act;
+18299 +       if _TYPE_="&lowerBound" then output ds_lower;
+18300 +       if _TYPE_="&upperBound" then output ds_upper;
+18301 +       if _TYPE_="STD" then output ds_std;
+18302 +  run;
+18304 +  data &outdata;
+18305 +       merge ds_fore ds_resid ds_act ds_lower ds_upper ds_std;
+18306 +       by &tsidVar &timeid;
+18307 +       label  FORECAST = "Forecast";
+18308 +       label  ACTUAL = "Actual";
+18309 +       label  RESIDUAL = "Residual";
+18310 +       label  LBOUND = "Lower Bound";
+18311 +       label  UBOUND = "Upper Bound";
+18312 +       label   STD = "Standard Deviation";
+18313 +  run;
+18314 +%mend EM_TSESM_CreateOutFor;
+18317 +%macro EM_TSESM_CreateOutExpand(indata=,
+18318 +                       target=,
+18319 +                       timeid=,
+18320 +                       tsidVar=,
+18321 +                       percent=,
+18322 +                       outlower=,
+18323 +                       outupper=,
+18324 +                       outdata=);
+18326 +  %let lowerBound = L&percent;
+18327 +  %let upperBound = U&percent;
+18329 +  /*proc print data=&indata(obs=200);
+18330 +  run;
+18331 +  */
+18333 +  data ds_fore(drop=&target)
+18334 +       ds_lower(drop=&target)
+18335 +       ds_upper(drop=&target)
+18336 +       ds_act;
+18337 +     set &indata;
+18338 +       if _TYPE_="FORECAST" and _LEAD_  > 0 then output ds_fore;
+18339 +       if _TYPE_="&lowerBound" and  _LEAD_  > 0 then output ds_lower;
+18340 +       if _TYPE_="&upperBound" and  _LEAD_  > 0 then output ds_upper;
+18341 +       if _TYPE_="ACTUAL" then output ds_act;
+18342 +  run;
+18344 +  /*
+18345 +  proc print data = ds_fore;
+18346 +  proc print data=ds_act;
+18347 +  run;
+18348 +  */
+18349 +  data &outdata;
+18350 +       merge ds_act ds_fore;
+18351 +       by &tsidVar &timeid;
+18352 +  run;
+18354 +  data &outlower;
+18355 +       merge ds_act ds_lower;
+18356 +       by &tsidVar &timeid;
+18357 +  run;
+18359 +  data &outupper;
+18360 +       merge ds_act ds_upper;
+18361 +       by &tsidVar &timeid;
+18362 +  run;
+18363 +  /*
+18364 +  proc print data=&outdata(obs=300);
+18365 +  proc print data=&outlower(obs=300);
+18366 +  proc print data=&outupper(obs=300);
+18367 +  run;
+18368 +  */
+18369 +%mend EM_TSESM_CreateOutExpand;
+18373 +%macro EM_TSESM_MakeOutClus(indata=,
+18374 +                   target=,
+18375 +                   timeid=,
+18376 +                   tsidVar=,
+18377 +                   percent=,
+18378 +                   outlower=,
+18379 +                   outupper=,
+18380 +                   outdata=);
+18383 +  %EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+18385 +  data &outdata(rename=(_NAME_ =_NAMEID_));
+18386 +       set &indata;
+18387 +       DROP _STATUS_ NOBS N NMISS MEAN MIN MAX STDDEV PREDICT LOWER UPPER STD;
+18388 +  run;
+18390 +  %let dsid=%sysfunc(open(&outdata));
+18391 +  %let vn_name =%sysfunc(varnum(&dsid, _TSID_));
+18392 +  %let dsid=%sysfunc(close(&dsid));
+18394 +  %if &vn_name > 0 %then %do;
+18395 +      data &outdata(drop=_NAMEID_);
+18396 +           merge &EM_USER_TSIDMAP &outdata;
+18397 +           by _TSID_;
+18398 +      run;
+18399 +  %end;
+18400 +  %else %do;
+18401 +      proc sort data= &outdata; by _NAMEID_;
+18402 +      run;
+18403 +      proc sort data = &EM_USER_TSIDMAP ;by _NAMEID_;
+18404 +      run;
+18405 +      data &outdata(drop=_NAMEID_);
+18406 +           merge &EM_USER_TSIDMAP &outdata;
+18407 +           by _NAMEID_;
+18408 +      run;
+18409 +  %end;
+18411 +%mend EM_TSESM_MakeOutClus;
+18414 +%macro EM_TSESM_CreateOutEst(indata=,
+18415 +                    target=,
+18416 +                    timeid=,
+18417 +                    outdata=);
+18419 +%mend EM_TSESM_CreateOutEst;
+18422 +%macro EM_TSESM_Best_Forecast(indata=,
+18423 +                method=,
+18424 +                timeinterval=,
+18425 +                timeid= ,
+18426 +                target= ,
+18427 +                tsidvar=,
+18428 +                lead=,
+18429 +                back=,
+18430 +                startsum=,
+18431 +                accumulate=,
+18432 +                seasonality=,
+18433 +                alpha=,
+18434 +                criterion=,
+18435 +                extendedvalue=,
+18436 +                outest = ,
+18437 +                outdata = ,
+18438 +                outfor = ,
+18439 +                outstat = ,
+18440 +                outsum=
+18441 +   );
+18443 +   %let _indata = &indata;
+18445 +   %if &tsidvar eq _SEGMENT_ %then %do;
+18446 +       proc sort data=&indata out=_tmpdata;
+18447 +            by  &tsidvar %EM_CROSSID &timeid ;
+18448 +       run;
+18449 +       proc timeseries  data =_tmpdata out=_tmpdata;
+18450 +            by  &tsidvar %EM_CROSSID ;
+18451 +            id &timeid interval=&timeinterval accumulate=&accumulate;
+18452 +            var &target / ;
+18453 +       run;
+18454 +       %let _indata = _tmpdata;
+18455 +   %end;
+18457 +   %let n_model = 0;
+18459 +   %if &EM_PROPERTY_SIMPLE eq Y %then %do;
+18461 +       %let n_model = %eval(&n_model+1);
+18463 +       %let _ds_out =_out&n_model;
+18464 +       %let _ds_outest =_outest&n_model;
+18465 +       %let _ds_outfor =_outfor&n_model;
+18466 +       %let _ds_outstat =_outstat&n_model;
+18467 +       %let _ds_outsum=_outsum&n_model;
+18469 +       %EM_TSESM_ESM(method=SIMPLE,
+18470 +        timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18471 +        lead=&lead, back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18472 +        out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18473 +        );
+18475 +   %end;
+18476 +   %if &EM_PROPERTY_DOUBLE eq Y %then %do;
+18478 +       %let n_model = %eval(&n_model+1);
+18480 +       %let _ds_out =_out&n_model;
+18481 +       %let _ds_outest =_outest&n_model;
+18482 +       %let _ds_outfor =_outfor&n_model;
+18483 +       %let _ds_outstat =_outstat&n_model;
+18484 +       %let _ds_outsum=_outsum&n_model;
+18486 +       %EM_TSESM_ESM(method=DOUBLE,
+18487 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18488 +            lead=&lead,  back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18489 +             out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18490 +       );
+18491 +   %end;
+18493 +   %if &EM_PROPERTY_LINEAR eq Y %then %do;
+18495 +       %let n_model = %eval(&n_model+1);
+18496 +       %let _ds_out =_out&n_model;
+18497 +       %let _ds_outest =_outest&n_model;
+18498 +       %let _ds_outfor =_outfor&n_model;
+18499 +       %let _ds_outstat =_outstat&n_model;
+18500 +       %let _ds_outsum=_outsum&n_model;
+18502 +       %EM_TSESM_ESM(method=LINEAR,
+18503 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18504 +            lead=&lead, back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18505 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18506 +        );
+18507 +   %end;
+18509 +   %if &EM_PROPERTY_DAMPTREND eq Y %then %do;
+18511 +       %let n_model = %eval(&n_model+1);
+18513 +       %let _ds_out =_out&n_model;
+18514 +       %let _ds_outest =_outest&n_model;
+18515 +       %let _ds_outfor =_outfor&n_model;
+18516 +       %let _ds_outstat =_outstat&n_model;
+18517 +       %let _ds_outsum=_outsum&n_model;
+18519 +       %EM_TSESM_ESM(method=DAMPTREND,
+18520 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18521 +            lead=&lead, back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18522 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18523 +            );
+18524 +   %end;
+18525 +   /*------- Seasonal model ------*/
+18527 +   %if (&timeinterval ne YEAR ) and ( &timeinterval ne DTYEAR ) %then %do;
+18529 +   %if (&EM_PROPERTY_WINTERS eq Y) %then %do;
+18531 +       %let n_model = %eval(&n_model+1);
+18533 +       %let _ds_out =_out&n_model;
+18534 +       %let _ds_outest =_outest&n_model;
+18535 +       %let _ds_outfor =_outfor&n_model;
+18536 +       %let _ds_outstat =_outstat&n_model;
+18537 +       %let _ds_outsum=_outsum&n_model;
+18539 +       %EM_TSESM_ESM(method=WINTERS,
+18540 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18541 +            lead=&lead,  back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18542 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18543 +        );
+18544 +   %end;
+18546 +   %if (&EM_PROPERTY_ADDSEASONAL eq Y) %then %do;
+18548 +       %let n_model = %eval(&n_model+1);
+18550 +       %let _ds_out =_out&n_model;
+18551 +       %let _ds_outest =_outest&n_model;
+18552 +       %let _ds_outfor =_outfor&n_model;
+18553 +       %let _ds_outstat =_outstat&n_model;
+18554 +       %let _ds_outsum=_outsum&n_model;
+18556 +       %EM_TSESM_ESM(method=ADDSEASONAL,
+18557 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18558 +            lead=&lead, back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18559 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18560 +       );
+18561 +   %end;
+18563 +   %if (&EM_PROPERTY_MULTSEASONAL eq Y) %then %do;
+18565 +       %let n_model = %eval(&n_model+1);
+18567 +       %let _ds_out =_out&n_model;
+18568 +       %let _ds_outest =_outest&n_model;
+18569 +       %let _ds_outfor =_outfor&n_model;
+18570 +       %let _ds_outstat =_outstat&n_model;
+18571 +       %let _ds_outsum=_outsum&n_model;
+18573 +       %EM_TSESM_ESM(method=MULTSEASONAL,
+18574 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18575 +            lead=&lead,  back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18576 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18577 +       );
+18578 +   %end;
+18580 +   %if (&EM_PROPERTY_ADDWINTERS eq Y) %then %do;
+18582 +       %let n_model = %eval(&n_model+1);
+18584 +       %let _ds_out =_out&n_model;
+18585 +       %let _ds_outest =_outest&n_model;
+18586 +       %let _ds_outfor =_outfor&n_model;
+18587 +       %let _ds_outstat =_outstat&n_model;
+18588 +       %let _ds_outsum=_outsum&n_model;
+18590 +       %EM_TSESM_ESM(method=ADDWINTERS,
+18591 +            timeinterval=&timeinterval, timeid=&timeid, target=&target, tsidvar=&tsidvar,
+18592 +            lead=&lead,  back=&back, startsum=&startsum, accumulate=&accumulate, seasonality=&seasonality, alpha=&alpha,
+18593 +            out=&_ds_out, outest=&_ds_outest, outfor =&_ds_outfor, outstat=&_ds_outstat, outsum=&_ds_outsum
+18594 +            );
+18595 +   %end;
+18598 +   %end; /* end of %if (&timeinterval ne YEAR ) and ( &timeinterval ne DTYEAR ) %then %do; */
+18599 +   /*-------- end of seasonal model  ------------------------------------------------------*/
+18601 +   %if &n_model eq 0 %then %do;
+18603 +       /*---- %PUT  ERROR:THE NUMBER OF CANDIDATE MODELS IS ZERO;  */
+18604 +       %let  EMEXCEPTIONSTRING = exception.server.tsdm.zerocandidatemodel;
+18605 +   %end;
+18606 +   %else %do;
+18607 +         %EM_TSESM_BestModelSel(crit=&criterion,
+18608 +                               n_mdl=&n_model,
+18609 +                               tsidvar=&tsidvar,
+18610 +                               timeid=&timeid,
+18611 +                               out=&outdata,
+18612 +                               outest=&outest,
+18613 +                               outfor =&outfor,
+18614 +                               outstat=&outstat,
+18615 +                               outsum=&outsum
+18616 +                  );
+18617 +   %end;
+18619 +%mend EM_TSESM_Best_Forecast;
+18622 +%macro EM_TSESM_ESM(method= ,
+18623 +           timeinterval=,
+18624 +           timeid= ,
+18625 +           target= ,
+18626 +           tsidvar=,
+18627 +           lead=,
+18628 +           back=,
+18629 +           startsum=,
+18630 +           accumulate=,
+18631 +           seasonality=,
+18632 +           alpha=,
+18633 +           out= ,
+18634 +           outest= ,
+18635 +           outfor= ,
+18636 +           outstat= ,
+18637 +           outsum=
+18638 +           );
+18640 +       proc sort data= &_indata out=_tmpdata;
+18641 +            by  &tsidvar %EM_CROSSID &timeid ;
+18642 +       run;
+18643 +       proc esm data = _tmpdata  lead=&lead    back=&back  startsum=&startsum
+18645 +       %if &seasonality ne DEFAULT %then %do;
+18646 +                     seasonality = &seasonality
+18647 +       %end;
+18648 +            out=&out
+18649 +            outest=&outest
+18650 +            outfor =&outfor
+18651 +            outstat=&outstat
+18652 +            outsum= &outsum
+18653 +            ;
+18654 +       id &timeid  interval = &timeinterval  accumulate=&accumulate  ;
+18656 +       %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+18657 +            %if &target ne %then %do;
+18658 +            forecast &target   /  model = none alpha=&alpha;
+18659 +            %end;
+18660 +            %if %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED ne %then %do;
+18661 +            forecast %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED/  model = &method alpha=&alpha use=&extendedvalue;
+18662 +            %end;
+18663 +       %end;
+18664 +       %else %if &EM_PROPERTY_EXPORTDATA eq DEFAULT %then %do;
+18665 +            %if &target ne %then %do;
+18666 +            forecast &target /  model =&method alpha=&alpha;
+18667 +            %end;
+18668 +            %if %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED ne %then %do;
+18669 +            forecast %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED/  model = none alpha=&alpha;
+18670 +            %end;
+18671 +       %end;
+18672 +       %else %do;   /*----- CLUSTER INPUT , KLD, SIMILARITY INPUT ------*/
+18673 +            %if &target ne %then %do;
+18674 +            forecast &target   /  model = &method alpha=&alpha;
+18675 +            %end;
+18676 +            /*
+18677 +            %if %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED ne %then %do;
+18678 +            forecast %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED/  model = &method alpha=&alpha;
+18679 +            %end;
+18680 +            */
+18681 +       %end;
+18683 +       %if &tsidvar ne %then %do;
+18684 +        by &tsidvar %EM_CROSSID;
+18685 +       %end;
+18686 +       run;
+18688 +%mend EM_TSESM_ESM;
+18692 +%macro EM_TSESM_BestModelSel(crit=,
+18693 +                    n_mdl=,
+18694 +                    tsidvar=_TSID_,
+18695 +                    timeid=MNTH_YR,
+18696 +                    out=&_outdata,
+18697 +                    outest=&_outest,
+18698 +                    outfor =&_outfor,
+18699 +                    outstat=&_outstat,
+18700 +                    outsum=&_outsum
+18701 +    );
+18703 +   %let statbls=select *, 1 as mdlID from _outstat1;
+18704 +   %let estbls=select *,  1 as mdlID from _outest1;
+18705 +   %let fortbls=select *, 1 as mdlID from _outfor1;
+18706 +   %let outbls=select *,  1 as mdlID from _out1;
+18707 +   %let sumtbls=select *, 1 as mdlID from _outsum1;
+18708 +   %do i=2 %to &n_mdl;
+18709 +      %let statbls=&statbls union all select *, &i as mdlID from _outstat&i;
+18710 +        %let estbls=&estbls union all select *, &i as mdlID from _outest&i;
+18711 +        %let fortbls=&fortbls union all select *, &i as mdlID from _outfor&i;
+18712 +        %let outbls=&outbls union all select *, &i as mdlID from _out&i;
+18713 +        %let sumtbls=&sumtbls union all select *, &i as mdlID from _outsum&i;
+18714 +   %end;
+18716 +   %let dsid=%sysfunc(open(_out1));
+18717 +   %let vn_tsid = 0;
+18719 +   %if &dsid > 0 %then %do;
+18720 +         %let vn_tsid =%sysfunc(varnum(&dsid, _TSID_));
+18721 +         %let dsid = %sysfunc(close(&dsid));
+18722 +   %end;
+18724 +   %if &vn_tsid <= 0  %then %do;
+18725 +       %let tsidvar=_NAME_;
+18726 +   %end;
+18728 +  /*
+18729 +  %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+18730 +     %let tsidvar=_NAME_;
+18731 +   %end;
+18732 +  */
+18734 +   proc sql;
+18735 +     create table tsstat as &statbls;
+18736 +     create table tsest  as &estbls;
+18737 +     create table tsfor  as &fortbls;
+18738 +     create table tsout  as &outbls;
+18739 +     create table tssum  as &sumtbls;
+18740 +   quit;
+18742 +    proc sort data=tsstat out=bestmdl;
+18743 +        by &tsidvar &crit mdlID;
+18744 +    run;
+18746 +    * when multiple BEST model found;
+18747 +    * use the one with smallest model ID;
+18748 +    data bestmdl;
+18749 +        set bestmdl;
+18750 +        by &tsIDvar;
+18751 +        if first.&tsIDVar;
+18752 +    run;
+18754 +   proc sql;
+18755 +      create table bestID as
+18756 +        select distinct(tsest.&tsidvar), _model_, &crit, bestmdl.mdlID
+18757 +        from bestmdl,tsest
+18758 +        where bestmdl.mdlID=tsest.mdlID and bestmdl.&tsidvar=tsest.&tsidvar;
+18760 +      create table &outfor
+18761 +        as select tsfor.*, _model_, &crit from tsfor, bestID
+18762 +        where tsfor.&tsidvar=bestID.&tsidvar and tsfor.mdlID=bestID.mdlID order by &tsidvar, &timeid;
+18764 +        create table &outstat
+18765 +        as select tsstat.*, _model_ from tsstat, bestID
+18766 +      where tsstat.&tsidvar=bestID.&tsidvar and tsstat.mdlID=bestID.mdlID order by &tsidvar;
+18768 +        create table &outest
+18769 +        as select tsest.*, &crit from bestmdl, tsest
+18770 +      where bestmdl.mdlID=tsest.mdlID and bestmdl.&tsidvar=tsest.&tsidvar order by &tsidvar;
+18772 +      create table &outsum
+18773 +        as select tssum.*, _model_, &crit from tssum, bestID
+18774 +      where tssum.&tsidvar=bestID.&tsidvar and tssum.mdlID=bestID.mdlID order by &tsidvar;
+18776 +      /*
+18777 +      %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+18778 +        create table &out
+18779 +          as select tsout.*, _model_, &crit from tsout, bestID
+18780 +        where tsout.&tsidvar=bestID.&tsidvar and tsout.mdlID=bestID.mdlID order by &tsidvar, &timeid;
+18781 +      %end;
+18782 +      */
+18784 +      %if &tsidvar eq _TSID_ %then %do;
+18786 +         create table &out
+18787 +          as select tsout.*, _model_, &crit from tsout, bestID
+18788 +        where tsout.&tsidvar=bestID.&tsidvar and tsout.mdlID=bestID.mdlID order by &tsidvar, &timeid;
+18790 +      %end;
+18791 + run;
+18792 +quit;
+18794 + /*%if &EM_PROPERTY_EXTINPUT eq Y %then %do; */
+18796 + %if &tsidvar = _NAME_ %then %do;
+18797 +      data
+18798 +            %let i=1;
+18799 +            %do i=1 %to &n_mdl;
+18800 +               %let _tmpdsname = _tmpds&i;
+18801 +                    &_tmpdsname
+18802 +            %end;
+18803 +        ;
+18804 +         set work.Bestmdl;
+18805 +            %let i=1;
+18806 +            %do i=1 %to &n_mdl;
+18807 +               %let _tmpdsname = _tmpds&i;
+18808 +                  if mdlID = &i then output &_tmpdsname;
+18809 +            %end;
+18810 +      run;
+18812 +      data &out;
+18813 +           set _out1;
+18814 +           keep &timeid %EM_TARGET;
+18815 +      run;
+18816 +      %let i=1;
+18817 +      %do i=1 %to &n_mdl;
+18818 +          %let _tmpdsname = _tmpds&i;
+18819 +          %let _outdsname = _out&i;
+18821 +          data &out;
+18822 +               set &out;
+18823 +               set &_outdsname(keep=
+18824 +               %let dsid=%sysfunc(open(&_tmpdsname));
+18825 +               %if &dsid > 0 %then %do;
+18826 +                  %let vn_name =%sysfunc(varnum(&dsid, _NAME_));
+18827 +                  %do %while(^%sysfunc(fetch(&dsid)));
+18828 +                     %let _name  = %sysfunc(getvarc(&dsid, &vn_name));
+18829 +                          &_name
+18830 +                  %end;
+18831 +                  %let dsid = %sysfunc(close(&dsid));
+18832 +               %end;
+18833 +               );
+18834 +           run;
+18835 +       %end;
+18837 +%end;
+18839 +data &out;
+18840 +     set  &out;
+18841 +      drop mdlID _MODEL_ &crit;
+18842 +data &outest;
+18843 +      set  &outest;
+18844 +      drop mdlID &crit;
+18845 +data &outfor;
+18846 +     set &outfor;
+18847 +     drop mdlID &crit;
+18848 +data &outstat;
+18849 +     set &outstat;
+18850 +     drop mdlID;
+18851 +data &outsum;
+18852 +     set &outsum;
+18853 +     drop mdlID &crit;
+18854 +run;
+18856 +%mend EM_TSESM_BestModelSel;
+18860 +%macro EM_TSESM_MakeOutlierIndex(indata=,
+18861 +                        target=,
+18862 +                        timeid=,
+18863 +                        outoutlier=,
+18864 +                        outlierds=,
+18865 +                        outdata=);
+18866 +%let label_Outlier = %sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_outlier, noquote));
+18867 +%let str_Actual_Outlier = %sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_actualoutlier, noquote));
+18868 +%let str_Actual = %sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_actual, noquote));
+18869 +data &outdata;
+18870 +     set &indata;
+18871 +     length OutlierIndex 8.;
+18872 +     length Outlier  $40;
+18873 +     label  OutlierIndex = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_outlierindex, noquote))";
+18874 +     label  Outlier = "&label_Outlier";
+18875 +   /*  if (ACTUAL ne . ) and ( (ACTUAL > UPPER) or (ACTUAL < LOWER) ) then do; OutlierIndex=1; Outlier="&label_Outlier";end;
+18876 +       else  do; OutlierIndex=0; outlier =" "; end; */
+18877 +     if (ACTUAL ne . ) and ( (ACTUAL > UPPER) or (ACTUAL < LOWER) ) then do; OutlierIndex=1; Outlier="&str_Actual_Outlier";end;
+18878 +       else  do; OutlierIndex=0; outlier ="&str_Actual"; end;
+18879 +run;
+18881 +data  &outoutlier;
+18882 +      set  &outdata;
+18883 +      keep &timeid _TSID_ _SEGMENT_ _NAME_ _NAMEID_ OUTLIERINDEX OUTLIER PREDICT;
+18884 +      if ACTUAL = . then delete;
+18885 +run;
+18887 +data &outlierds;
+18888 +     set &outoutlier;
+18889 +     if OUTLIERINDEX = 0 then delete;
+18890 +     Drop OUTLIERINDEX;
+18891 +run;
+18893 +%mend  EM_TSESM_MakeOutlierIndex;
+18896 +%macro EM_TSESM_MakeSmoothedOutds(indata=,
+18897 +                         inoutlierds=,
+18898 +                         target=,
+18899 +                         timeid=,
+18900 +                         tsidvar=_TSID_,
+18901 +                         replace=,
+18902 +                         outdata=);
+18905 +%EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+18908 +%let dsid=%sysfunc(open(&indata));
+18909 +%let vn_tsid = 0;
+18910 +%if &dsid > 0 %then %do;
+18911 +         %let vn_tsid =%sysfunc(varnum(&dsid, _TSID_));
+18912 +         %let dsid = %sysfunc(close(&dsid));
+18913 +%end;
+18915 +%if &vn_tsid <= 0  %then %do;
+18916 +    %let tsidvar=_NAME_;
+18917 +%end;
+18919 +%if &tsidvar = _TSID_ %then %do;
+18920 +/* %if &EM_PROPERTY_EXTINPUT eq Y %then %do; */
+18921 + /*    data &outdata;
+18922 +          merge &indata &inoutlierds;
+18923 +          by _TSID_ &timeid;
+18924 +          if OutlierIndex > 0 then
+18925 +          %if &replace eq PREDICT %then %do;
+18926 +             &target = PREDICT;
+18927 +          %end;
+18928 +          %else %do;
+18929 +             &target = .;
+18930 +          %end;
+18931 +           Drop Predict _NAME_ OutlierIndex;
+18932 +     run;     */
+18933 +  %let dsid=%sysfunc(open(&EM_USER_TSIDMAP));
+18934 +     %if &dsid > 0 %then %do;
+18935 +         %let vn_nameid =%sysfunc(varnum(&dsid, _VARNAME_));
+18936 +         %let vn_tsid =%sysfunc(varnum(&dsid, _TSID_));
+18937 +         %let i = 1;
+18938 +              %do %while(^%sysfunc(fetch(&dsid)));
+18939 +                  %let _varname= %sysfunc(getvarc(&dsid, &vn_nameid));
+18940 +                  %let _vartsid= %sysfunc(getvarn(&dsid, &vn_tsid));
+18941 +                  %if &i eq 1 %then %do;
+18942 +                      data _tmpoutlier;
+18943 +                           set &inoutlierds;
+18944 +                           if _NAME_ ="&_varname" and _TSID_ = &_vartsid then output;
+18945 +                      run;
+18946 +                      data &outdata;
+18947 +                           merge &indata _tmpoutlier;
+18948 +                           by _TSID_ &timeid ;
+18949 +                           if OutlierIndex  > 0 then
+18950 +                              %if &replace eq PREDICT %then %do;
+18951 +                                &_varname = PREDICT;
+18952 +                              %end;
+18953 +                              %else %do;
+18954 +                                &_varname = .;
+18955 +                              %end;
+18956 +                            Drop Predict _NAME_  OutlierIndex Outlier;
+18957 +                      run;
+18958 +                   %end;
+18959 +                   %else %do;
+18960 +                      data _tmpoutlier;
+18961 +                           set &inoutlierds;
+18962 +                           if _NAME_ ="&_varname" and _TSID_ = &_vartsid  then output;
+18963 +                      run;
+18964 +                      data &outdata;
+18965 +                           merge &outdata _tmpoutlier;
+18966 +                           by _TSID_ &timeid ;
+18967 +                           if OutlierIndex  > 0 then
+18968 +                              %if &replace eq PREDICT %then %do;
+18969 +                                &_varname = PREDICT;
+18970 +                              %end;
+18971 +                              %else %do;
+18972 +                                &_varname = .;
+18973 +                              %end;
+18974 +                           Drop Predict _NAME_  OutlierIndex Outlier;
+18975 +                      run;
+18976 +                   %end;
+18977 +                   %let i = %eval(&i+1);
+18979 +              %end;
+18980 +           %let dsid = %sysfunc(close(&dsid));
+18981 +      %end;
+18982 +%end;
+18983 +%else %do;  /*  %if &tsidvar = _NAME_ %then %do; */
+18985 +     %let dsid=%sysfunc(open(&EM_USER_TSIDMAP));
+18986 +     %if &dsid > 0 %then %do;
+18987 +         %let vn_nameid =%sysfunc(varnum(&dsid, _NAMEID_));
+18988 +         %let i = 1;
+18989 +              %do %while(^%sysfunc(fetch(&dsid)));
+18990 +                  %let _varname= %sysfunc(getvarc(&dsid, &vn_nameid));
+18991 +                  %if &i eq 1 %then %do;
+18992 +                      data _tmpoutlier;
+18993 +                           set &inoutlierds;
+18994 +                           if _NAME_ ="&_varname"  then output;
+18995 +                      run;
+18996 +                      data &outdata;
+18997 +                           merge &indata _tmpoutlier;
+18998 +                           by &timeid;
+18999 +                           if OutlierIndex  > 0 then
+19000 +                              %if &replace eq PREDICT %then %do;
+19001 +                                &_varname = PREDICT;
+19002 +                              %end;
+19003 +                              %else %do;
+19004 +                                &_varname = .;
+19005 +                              %end;
+19006 +                            Drop Predict _NAME_ OutlierIndex Outlier;
+19007 +                      run;
+19008 +                   %end;
+19009 +                   %else %do;
+19010 +                      data _tmpoutlier;
+19011 +                           set &inoutlierds;
+19012 +                           if _NAME_ ="&_varname"  then output;
+19013 +                      run;
+19014 +                      data &outdata;
+19015 +                           merge &outdata _tmpoutlier;
+19016 +                           by &timeid;
+19017 +                           if OutlierIndex  > 0 then
+19018 +                              %if &replace eq PREDICT %then %do;
+19019 +                                &_varname = PREDICT;
+19020 +                              %end;
+19021 +                              %else %do;
+19022 +                                &_varname = .;
+19023 +                              %end;
+19024 +                           Drop Predict _NAME_ OutlierIndex Outlier;
+19025 +                      run;
+19026 +                   %end;
+19027 +                   %let i = %eval(&i+1);
+19029 +              %end;
+19030 +           %let dsid = %sysfunc(close(&dsid));
+19031 +      %end;
+19032 +      %else %do;
+19033 +            /* this block is added 09022011*/
+19034 +            /* works for wide table in which each time series has a column */
+19036 +            proc transpose data=&indata out=_tmpdata1;
+19037 +                by &timeID;
+19038 +            run;
+19040 +            proc sql;
+19041 +                create table _tmpdata2 as
+19042 +                    select a.*, b.outlierindex, b.outlier, b.predict
+19043 +                        from _tmpdata1 as a left join &inoutlierds as b
+19044 +                            on a.&timeID eq b.&timeID and a._name_ eq b._name_
+19045 +                        order by a.&timeID, a._name_
+19046 +                    ;
+19047 +            quit;
+19049 +            data _tmpdata2;
+19050 +                set _tmpdata2;
+19051 +                if outlierindex eq 1 then
+19052 +                    if &replace eq PREDICT then col1=predict; else col1=.;
+19053 +            run;
+19055 +            proc transpose data=_tmpdata2 out=_tmpdata3(drop=_name_ _label_);
+19056 +                by &timeID;
+19057 +                ID _name_;
+19058 +                var col1;
+19059 +            proc sort data=&inoutlierds out=_tmpoutlier;
+19060 +                by &timeID _name_;
+19061 +            proc transpose data=_tmpoutlier out=_tmpdata4(drop=_name_ _label_) prefix=Outlier_;
+19062 +                by &timeID;
+19063 +                ID _name_;
+19064 +                var outlier;
+19065 +            run;
+19067 +            data &outdata;
+19068 +                merge _tmpdata3 _tmpdata4;
+19069 +                by &timeID;
+19070 +            run;
+19071 +      %end;
+19072 +%end;
+19073 +%mend EM_TSESM_MakeSmoothedOutds;
+19075 +%Macro EM_TSESM_MakeOutKLD(indata=&EM_USER_OUTPRED,
+19076 +                  insumdata=&EM_USER_OUTSUM,
+19077 +                target=&_targetVar,
+19078 +                timeid=&_timeidVar,
+19079 +                futurepoint=1,
+19080 +                outKLD=&EM_USER_OUTKLD
+19081 +                );
+19083 +%if &futurepoint > 0 %then %do;
+19085 +proc sort data=&indata out=_tmptimeid;
+19086 +     by &timeid;
+19087 +run;
+19089 +data _tmptimeid(keep=&timeid);
+19090 +      set _tmptimeid; by &timeid;
+19091 +      if first.&timeid then output;
+19092 +run;
+19094 +%let _targetTime =;
+19095 +%let dsid=%sysfunc(open(work._tmptimeid));
+19096 +%if &dsid > 0 %then %do;
+19097 +    %let vn_timeid =%sysfunc(varnum(&dsid, &timeid));
+19098 +    %let i = 1;
+19099 +    %do %while(^%sysfunc(fetch(&dsid)));
+19100 +       %if &i eq &futurepoint %then %do;
+19101 +       %let _targetTime  = %sysfunc(getvarn(&dsid, &vn_timeid));
+19102 +       %end;
+19103 +       %let i = %eval(&i+1);
+19104 +    %end;
+19105 +    %let dsid = %sysfunc(close(&dsid));
+19106 +%end;
+19108 +data _tmpKLD(keep = _TSID_ _NAME_ PREDICT STD);
+19109 +   set &indata;
+19110 +   if &timeid eq &_targetTime then output;
+19111 +run;
+19113 +%end;  /* end of %if &futurepoint > 0 %then %do; */
+19114 +%else %do;
+19117 +data _tmpKLD(keep = _TSID_ _NAME_ PREDICT STD);
+19118 +   set &insumdata;
+19119 +run;
+19122 +%end;
+19124 +%EM_TSESM_KLD(indata=work._tmpKLD, outdata=&outKLD);
+19126 +/* Merge TSIDMAP  */
+19128 +%EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+19129 +data &outKLD(rename=(_NAME_ =_NAMEID_));
+19130 +       set &outKLD;
+19131 +run;
+19133 +%let dsid=%sysfunc(open(&outKLD));
+19134 +%let vn_name =%sysfunc(varnum(&dsid, _TSID_));
+19135 +%let dsid=%sysfunc(close(&dsid));
+19137 +%if &vn_name > 0 %then %do;
+19138 +      data &outKLD(drop=_NAMEID_);
+19139 +           merge &EM_USER_TSIDMAP &outKLD;
+19140 +           by _TSID_;
+19141 +      run;
+19142 +%end;
+19143 +%else %do;
+19144 +      proc sort data= &outKLD; by _NAMEID_;
+19145 +      run;
+19146 +      proc sort data = &EM_USER_TSIDMAP ;by _NAMEID_;
+19147 +      run;
+19148 +      data &outKLD(drop=_NAMEID_);
+19149 +           merge &EM_USER_TSIDMAP &outKLD;
+19150 +           by _NAMEID_;
+19151 +      run;
+19152 +%end;
+19154 +/* delete _tmptimeid  _tmpKLD */
+19155 +%Mend  EM_TSESM_MakeOutKLD;
+19158 +%Macro EM_TSESM_MakeOutPred(indata=&EM_USER_OUTFORCST,
+19159 +                 target=&_targetVar,
+19160 +                 timeid=&_timeidVar,
+19161 +                 outdata=&EM_USER_OUTPRED
+19162 +                 );
+19164 +%EM_GETNAME(KEY=TSMETA, TYPE=DATA);
+19165 +%let _EndTime = ;
+19166 +%let dsid=%sysfunc(open(&EM_USER_TSMETA));
+19167 +%if &dsid > 0 %then %do;
+19168 +    %let vn_end =%sysfunc(varnum(&dsid, END));
+19169 +    %let vn_format  = %sysfunc(varnum(&dsid, TIMEFORMAT));
+19170 +    %do %while(^%sysfunc(fetch(&dsid)));
+19171 +       %let _EndTime  = %sysfunc(getvarn(&dsid, &vn_end));
+19172 +       /*--------------------------------------------------------
+19173 +       %let _TimeFormat  = %sysfunc(getvarc(&dsid, &vn_format));
+19174 +       %let _EndTime =%sysfunc( putn(&_EndTime, &_TimeFormat));
+19175 +        ---------------------------------------------------------*/
+19176 +    %end;
+19177 +    %let dsid = %sysfunc(close(&dsid));
+19178 +%end;
+19180 +data &outdata(keep= _TSID_ _NAME_  &timeid PREDICT LOWER UPPER STD);
+19181 +     set &indata;
+19182 +     if &timeid > &_EndTime then output;
+19183 +run;
+19184 +%Mend  EM_TSESM_MakeOutPred;
+19187 +%macro EM_TSESM_KLD(indata=work._tmp, outdata=_out);
+19189 +%let std_x = ;
+19190 +%let mu_y = ;
+19192 +%let dsid=%sysfunc(open(&indata));
+19193 +%if &dsid > 0 %then %do;
+19194 +    %let vn_pred =%sysfunc(varnum(&dsid, PREDICT));
+19195 +    %let vn_std  = %sysfunc(varnum(&dsid, STD));
+19196 +    %let i=1;
+19197 +    %do %while(^%sysfunc(fetch(&dsid)));
+19198 +        %let _pred  = %sysfunc(getvarn(&dsid, &vn_pred));
+19199 +        %let _std  = %sysfunc(getvarn(&dsid, &vn_std));
+19200 +        %let _tsid = _TSID&i.;
+19201 +        /* create new data set */
+19202 +            %if &i = 1 %then %do;
+19203 +            data _tmpindata;
+19204 +                set &indata;
+19205 +                  mu_x = &_pred;
+19206 +                  std_x = &_std;
+19207 +                  rename predict = mu_y;
+19208 +                  rename std = std_y;
+19209 +            run;
+19210 +        data _tmpout;
+19211 +                 set _tmpindata;
+19212 +             KLD1=0.5*(log(std_y**2/std_x**2)+std_x**2/std_y**2+(mu_y-mu_x)**2/std_y**2-1);
+19213 +             KLD2=0.5*(log(std_x**2/std_y**2)+std_y**2/std_x**2+(mu_x-mu_y)**2/std_x**2-1);
+19214 +             &_tsid= (KLD1+KLD2)/2;
+19215 +             if &_tsid < 0 then &_tsid = 0;
+19216 +                   drop KLD1 KLD2;
+19217 +         run;
+19218 +             %end;
+19219 +         %else %do;
+19220 +         data _tmpindata;
+19221 +                  set _tmpout;
+19222 +                  mu_x = &_pred;
+19223 +                  std_x = &_std;
+19225 +             run;
+19226 +         data _tmpout;
+19227 +                 set _tmpindata;
+19228 +             KLD1=0.5*(log(std_y**2/std_x**2)+std_x**2/std_y**2+(mu_y-mu_x)**2/std_y**2-1);
+19229 +             KLD2=0.5*(log(std_x**2/std_y**2)+std_y**2/std_x**2+(mu_x-mu_y)**2/std_x**2-1);
+19230 +             &_tsid= (KLD1+KLD2)/2;
+19231 +             if &_tsid < 0 then &_tsid = 0;
+19232 +                   drop KLD1 KLD2;
+19233 +         run;
+19235 +         %end;
+19236 +             %let i = %eval(&i+1);
+19238 +    %end;
+19239 +    %let dsid = %sysfunc(close(&dsid));
+19240 +    data &outdata;
+19241 +         set _tmpout;
+19242 +         drop mu_x mu_y std_x std_y;
+19243 +    run;
+19244 +%end;
+19245 +%mend EM_TSESM_KLD;
+19248 +%macro EM_TSESM_MakeOutClusInput(indata=,
+19249 +                   target=,
+19250 +                   timeid=,
+19251 +                   tsidVar=,
+19252 +                   percent=,
+19253 +                   outlower=,
+19254 +                   outupper=,
+19255 +                   esmmethod=,
+19256 +                   criterion=,
+19257 +                   outdata=);
+19259 +  %EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+19261 +  data &outdata(rename=(_NAME_ =_NAMEID_));
+19262 +       set &indata;
+19263 +       DROP _STATUS_ NOBS N NMISS MEAN MIN MAX STDDEV PREDICT LOWER UPPER STD
+19264 +  %if &esmmethod eq BEST %then %do;
+19265 +      mdlID _MODEL_ &criterion
+19267 +  %end;
+19268 +  ;
+19269 +  run;
+19271 +  %let dsid=%sysfunc(open(&outdata));
+19272 +       %let vn_name =%sysfunc(varnum(&dsid, _TSID_));
+19273 +  %let dsid=%sysfunc(close(&dsid));
+19275 +  %if &vn_name > 0 %then %do;
+19276 +      proc sort data= &outdata; by _TSID_;
+19277 +      run;
+19278 +      proc sort data = &EM_USER_TSIDMAP ;by _TSID_;
+19279 +      run;
+19281 +      data &outdata(drop=_NAMEID_);
+19282 +           merge &EM_USER_TSIDMAP &outdata;
+19283 +           by _TSID_;
+19284 +      run;
+19285 +  %end;
+19286 +  %else %do;
+19287 +      proc sort data= &outdata; by _NAMEID_;
+19288 +      run;
+19289 +      proc sort data = &EM_USER_TSIDMAP ;by _NAMEID_;
+19290 +      run;
+19291 +      data &outdata(drop=_NAMEID_);
+19292 +           merge &EM_USER_TSIDMAP &outdata;
+19293 +           by _NAMEID_;
+19294 +      run;
+19295 +  %end;
+19297 +%mend EM_TSESM_MakeOutClusInput;
+19299 +%macro EM_TSESM_MakeOutSimInput(indata=,
+19300 +                   inoutfor=,
+19301 +                   target=,
+19302 +                   timeid=,
+19303 +                   tsidVar=,
+19304 +                   esmmethod=,
+19305 +                   criterion=,
+19306 +                   outdata=);
+19309 +  %EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+19310 +  %EM_GETNAME(KEY=TSMETA, TYPE=DATA);
+19312 +   %let _EndTime = ;
+19313 +   %let dsid=%sysfunc(open(&EM_USER_TSMETA));
+19314 +   %if &dsid > 0 %then %do;
+19315 +   %let vn_end =%sysfunc(varnum(&dsid, END));
+19316 +   %let vn_format  = %sysfunc(varnum(&dsid, TIMEFORMAT));
+19317 +   %do %while(^%sysfunc(fetch(&dsid)));
+19318 +       %let _EndTime  = %sysfunc(getvarn(&dsid, &vn_end));
+19319 +   %end;
+19320 +   %let dsid = %sysfunc(close(&dsid));
+19321 +   %end;
+19323 +   %em_varMacro(name=tsesm_crossid, metadata= &EM_DATA_VARIABLESET, key=NAME,
+19324 +       where=%nrbquote(ROLE='CROSSID' and USE ne 'N') , nummacro=tsesm_crossidNum);
+19326 +   data _out1;
+19327 +       set &indata;
+19328 +       DROP _STATUS_ NOBS N NMISS MEAN MIN MAX STDDEV PREDICT LOWER UPPER STD
+19329 +           %tsesm_crossid
+19330 +   %if &esmmethod eq BEST %then %do;
+19331 +      mdlID _MODEL_ &criterion
+19332 +   %end;
+19333 +   ;
+19334 +   run;
+19336 +    %let dsid=%sysfunc(open(work._out1));
+19337 +    %if &dsid > 0 %then %do;
+19338 +      %let vn_tsid =%sysfunc(varnum(&dsid, _TSID_));
+19339 +      %let dsid = %sysfunc(close(&dsid));
+19340 +    %end;
+19342 +    /*
+19343 +    proc print data=_out1(obs=10);
+19344 +    run;
+19345 +    */
+19346 +    %let _existtsid = Y;
+19347 +    %if (&vn_tsid = 0)  %then %do;
+19348 +    %let _existtsid = N;
+19349 +    %goto NO_TSID_SIMINPUT;
+19350 +    %end;
+19352 +    data _out1;
+19353 +        set _out1;
+19354 +        where _name_ = "&target";
+19355 +    run;
+19356 +    %let target2 = &target._;
+19357 +    proc transpose data=_out1 out=_out2 prefix=&target2;
+19358 +            id _TSID_  ;
+19359 +    run;
+19360 +    /*
+19361 +    proc print data=_out2(obs=11);
+19362 +    run;
+19363 +    */
+19364 +    data _out2;
+19365 +       length _index 8.;
+19366 +       set _out2;
+19367 +       _index=_N_;
+19368 +       drop _NAME_ _LABEL_;
+19369 +    run;
+19372 +   data _out3;
+19373 +       length _index 8.;
+19374 +        set &inoutfor(where=(_TSID_=1 and &timeid > &_EndTime));
+19375 +         _index =_N_;
+19376 +        keep &timeid _index;
+19378 +   run;
+19379 +   /*
+19380 +   proc print data=_out2(obs=12);
+19381 +   proc print data =_out3(obs=13);
+19382 +   run;
+19383 +   */
+19384 +   data &outdata(drop=_index);
+19385 +        merge _out3 _out2;by _index;
+19386 +        run;
+19389 +  proc transpose data=&outdata out=_tout;
+19390 +     id &timeid;
+19391 +   run;
+19392 +   data _tout;
+19393 +        length _TSID_ 8.;
+19394 +        set _tout;
+19395 +        rename _NAME_= _NAMEID_;
+19396 +        _TSID_ = _N_;
+19397 +        label _NAME_ = "NAMEID";
+19398 +        keep _NAME_ _TSID_;
+19400 +   run;
+19402 +   data &EM_USER_TSIDMAP;
+19403 +        merge  _tout  &EM_USER_TSIDMAP; by _TSID_;
+19404 +   run;
+19405 +   /*
+19406 +   proc print data=_tout(obs=14);
+19407 +   run;
+19408 +   */
+19409 +   proc datasets lib=work nolist;
+19410 +      delete  _out1 _tmpout1 _out2 _out3 _tout;
+19411 +   run;
+19414 +   %NO_TSID_SIMINPUT:
+19415 +   %if  &_existtsid eq N %then %do;
+19416 +   data &outdata;
+19417 +        set &inoutfor(where=(&timeid > &_EndTime));
+19418 +   run;
+19419 +   %end;
+19422 +%mend EM_TSESM_MakeOutSimInput;
+19425 +%macro EM_TS_CONVERT_LONG_TO_WIDE(indata=, outdata=, wherevar=, nwherevalue=, targetvar=, timeid=);
+19426 +%do i=1 %to &nwherevalue;
+19427 +     %if &i = 1 %then %do;
+19428 +        data &outdata(drop = &wherevar);
+19429 +             set &indata;
+19430 +               if &wherevar= &i;
+19431 +                   %if &wherevar = _TSID_ %then %let newname = TSID_&i;
+19432 +               %else %let newname = &wherevar_&i;
+19433 +                rename  &targetvar= &newname;
+19434 +                   label &targetvar ="&targetvar._&i";
+19435 +           run;
+19436 +       %end;
+19437 +       %else %do;
+19438 +        data _tmp_out(drop = &wherevar);
+19439 +             set &indata;
+19440 +               if &wherevar= &i;
+19441 +                   %if &wherevar = _TSID_ %then %let newname = TSID_&i;
+19442 +               %else %let newname = &wherevar_&i;
+19443 +                rename  &targetvar= &newname;
+19444 +                   label &targetvar ="&targetvar._&i";
+19445 +           run;
+19446 +             data &outdata;
+19447 +                  merge &outdata  _tmp_out; by &timeid;
+19448 +         run;
+19449 +       %end;
+19450 +%end;
+19452 +%EM_TS_DELETE_DATA(lib=work, data=_tmp_out);
+19454 +%mend EM_TS_CONVERT_LONG_TO_WIDE;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMTSDM.TSUTILITY_MACROS.SOURCE.
+19456 +/*
+19457 +       MACRO: TS Utility macros
+19459 +       PURPOSE: TS Utility macros
+19460 +       SUPPORT: Taiyeong Lee and Ruiwen Zhang
+19462 +       HISTORY:
+19463 +       NOTE:
+19465 +*/
+19467 +/*
+19468 +%macro  EM_TS_CreateTsMetaDs(data= , decdata= , decmeta= , cmeta=, crossid=, outfile=,
+19469 +                          timeid=, timeformat=, timeinformat=);
+19470 + %global m_data m_decdata m_decmeta  m_cmeta m_outfile m_crossid m_timeid m_timeformat m_timeinformat;
+19472 +    %do;
+19473 +    %let m_data      = &data;
+19474 +    %let m_decdata   = &decdata;
+19475 +    %let m_decmeta   = &decmeta;
+19476 +    %let m_cmeta     = &cmeta;
+19477 +    %let m_outfile   = &outfile;
+19478 +    %let m_crossid   = &crossid;
+19479 +    %let m_timeid    = &timeid;
+19480 +    %let m_timeformat    = &timeformat;
+19481 +    %let m_timeinformat    = &timeinformat;
+19482 +    dm "afa c=sashelp.emtsdm.Createtsmetads.scl";
+19483 +  %end;
+19484 +%mend EM_TS_CreateTsMetaDs;
+19485 +*/
+19486 +%macro  EM_TS_CreateTSMetaData(indata=, timeid=, timeformat=,timeformattype=, timeinterval=, outds=);
+19487 +proc sql;
+19488 +      create table _tmp_inds
+19489 +      as select distinct &timeid from  &indata;
+19490 +quit;
+19491 +run;
+19492 +proc timeid data=_tmp_inds outinterval=_tmp_tsmeta;
+19493 +  id &timeid
+19494 +%if &timeinterval ne %then %do;
+19495 +    %if &timeformattype eq DATE %then %do;
+19496 +        interval=&timeinterval
+19497 +    %end;
+19498 +    %else %if &timeformattype eq DATETIME  %then %do;
+19499 +        %let dttimeinterval= DT&timeinterval;
+19500 +         interval=&dttimeinterval
+19501 +    %end;
+19502 +%end;
+19503 +;
+19504 +run;
+19506 +data &outds;
+19507 +     set _tmp_tsmeta;
+19508 +     format START &timeformat;
+19509 +     format END &timeformat;
+19510 +     length APPLY_START_END $8;
+19511 +     APPLY_START_END ="No";
+19512 +     FORMAT = "&timeformat";
+19513 +     ROLE ="TIMEID";
+19514 +     rename TIMEID = NAME;
+19515 +     rename SEASONALITY= LengthOfCycle;
+19516 +     rename INTERVAL = TIMEINTERVAL ;
+19517 +     rename FORMAT = TIMEFORMAT;
+19518 +     output;
+19519 +     Label  ROLE  = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_varrole, noquote))";
+19520 +     Label  APPLY_START_END  = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_applystartend, noquote))";
+19521 +     keep TIMEID ROLE START END INTERVAL SEASONALITY FORMAT APPLY_START_END;
+19522 +run;
+19524 +%EM_TS_DELETE_DATA(lib=work, dsname=_tmptsmeta);
+19525 +%EM_TS_DELETE_DATA(lib=work, dsname=_tmp_inds);
+19527 +%mend EM_TS_CreateTSMetaData;
+19531 +%macro EM_TS_GETTSMETA(updated=, eminfodata=);
+19533 +/* if updated = Y it will pass the TSMETA created by just the previous node */
+19535 +%let _tsmetads = ;
+19537 +%if &updated = Y %then %do;
+19538 +%let _tsmetads = &EM_LIB..%sysfunc(strip(&EM_METASOURCE_NODEID))_TSMETA;
+19539 +%if %sysfunc(exist(&_tsmetads)) %then %do;
+19540 +%goto endline;
+19541 +%end;
+19542 +%end;
+19544 +%if &eminfodata eq %then %do;
+19545 +    %let dsid=%sysfunc(open(&EM_IMPORT_DATA_EMINFO));
+19546 +    data &EM_DATA_EMINFO;
+19547 +         set &EM_IMPORT_DATA_EMINFO;
+19548 +    run;
+19549 +%end;
+19550 +%else %do;
+19551 +    %let dsid=%sysfunc(open(&eminfodata));
+19552 +    data &EM_DATA_EMINFO;
+19553 +         set &eminfodata;
+19554 +    run;
+19555 +%end;
+19556 +%if &dsid > 0 %then %do;
+19557 +    %let vn_data =%sysfunc(varnum(&dsid, DATA));
+19558 +    %let vn_key =%sysfunc(varnum(&dsid, KEY));
+19559 +    %do %while(^ %sysfunc(fetch(&dsid)));
+19560 +         %let _key  = %sysfunc(getvarc(&dsid, &vn_key));
+19561 +         %if &_key eq TSMETA %then %do;
+19562 +              %let _tsmetads  = %sysfunc(getvarc(&dsid, &vn_data));
+19563 +         %end;
+19564 +    %end;
+19565 +    %let dsid = %sysfunc(close(&dsid));
+19566 +%end; /* the end of %if &dsid > 0 %then %do; */
+19568 +%endline:
+19570 +%if &_tsmetads ne %then %do;
+19571 +    %EM_REGISTER(KEY=TSMETA, TYPE=DATA);
+19572 +    %EM_GETNAME(KEY=TSMETA, TYPE=DATA);
+19573 +     %if %sysfunc(exist(&_tsmetads)) %then %do;
+19574 +         data &EM_USER_TSMETA;
+19575 +                   set &_tsmetads;
+19576 +         run;
+19577 +    %end;
+19578 +%end;
+19580 +*proc print data=&EM_DATA_EMINFO;
+19581 +*proc print data=&EM_IMPORT_DATA_EMINFO;
+19582 +*run;
+19583 +%MEND EM_TS_GETTSMETA;
+19586 +/*
+19587 +%macro EM_GETTSMETAVARS(TimeInterval=);
+19588 +%global &TimeInterval;
+19589 +%let dsid=%sysfunc(open(&EM_USER_TSMETA));
+19590 +%if &dsid > 0 %then %do;
+19591 +%let vn_timeinterval =%sysfunc(varnum(&dsid, TIMEINTERVAL));
+19592 +%let vn_role =%sysfunc(varnum(&dsid, ROLE));
+19593 +%do %while(^ %sysfunc(fetch(&dsid)));
+19594 +     %let _role  = %sysfunc(getvarc(&dsid, &vn_role));
+19595 +     %if &_role eq TIMEID %then %do;
+19596 +            %let &TimeInterval  = %sysfunc(getvarc(&dsid, &vn_timeinterval));
+19597 +     %end;
+19598 +%end;
+19599 +%let dsid = %sysfunc(close(&dsid));
+19600 +%end;
+19601 +%MEND EM_GETTSMETAVARS;
+19602 +*/
+19603 +%macro EM_TS_GETTSMETAVARS(TimeInterval=, TimeId=, EndTime=);
+19604 +%global &TimeInterval;
+19605 +%global &TimeId;
+19606 +%global &EndTime;
+19607 +%let dsid=%sysfunc(open(&EM_USER_TSMETA));
+19608 +proc print data=&EM_USER_TSMETA;
+19609 +run;
+19610 +%if &dsid > 0 %then %do;
+19611 +%if &TimeInterval ne %then %do;
+19612 +    %let vn_timeinterval =%sysfunc(varnum(&dsid, TIMEINTERVAL));
+19613 +    %let vn_role =%sysfunc(varnum(&dsid, ROLE));
+19614 +    %do %while(^ %sysfunc(fetch(&dsid)));
+19615 +        %let _role  = %sysfunc(getvarc(&dsid, &vn_role));
+19616 +        %if &_role eq TIMEID %then %do;
+19617 +            %let &TimeInterval  = %sysfunc(getvarc(&dsid, &vn_timeinterval));
+19618 +        %end;
+19619 +     %end;
+19620 +%end;
+19621 +%if &TimeId ne %then %do;
+19622 +    %let vn_varname =%sysfunc(varnum(&dsid, NAME));
+19623 +    %let vn_role =%sysfunc(varnum(&dsid, ROLE));
+19624 +    %do %while(^ %sysfunc(fetch(&dsid)));
+19625 +        %let _role  = %sysfunc(getvarc(&dsid, &vn_role));
+19626 +        %if &_role eq TIMEID %then %do;
+19627 +            %let &TimeId  = %sysfunc(getvarc(&dsid, &vn_varname);
+19628 +        %end;
+19629 +    %end;
+19630 +%end;
+19632 +%if &EndTime ne %then %do;
+19633 +    %let vn_end =%sysfunc(varnum(&dsid, END));
+19634 +    %let vn_role =%sysfunc(varnum(&dsid, ROLE));
+19635 +    %do %while(^ %sysfunc(fetch(&dsid)));
+19636 +        %let _role  = %sysfunc(getvarc(&dsid, &vn_role));
+19637 +        %if &_role eq TIMEID %then %do;
+19638 +            %let &EndTime  = %sysfunc(getvarn(&dsid, &vn_end));
+19639 +        %end;
+19640 +     %end;
+19641 +%end;
+19642 +%let dsid = %sysfunc(close(&dsid));
+19643 +%end;
+19644 +%MEND EM_TS_GETTSMETAVARS;
+19648 +/*------------------------------------------------------------------
+19650 +      Macro EM_GETTSIDMAP
+19652 +------------------------------------------------------------------+*/
+19655 +%macro EM_TS_GETTSIDMAP(updated=);
+19657 +%let _tsidmap = ;
+19659 +%if &updated = Y %then %do;
+19660 +%let _tsidmap = &EM_LIB..%sysfunc(strip(&EM_METASOURCE_NODEID))_TSIDMAP ;
+19661 +%if %sysfunc(exist(&_tsidmap)) %then %do;
+19662 +%goto endline;
+19663 +%end;
+19664 +%end;
+19666 +%let dsid=%sysfunc(open(&EM_IMPORT_DATA_EMINFO));
+19667 +%if &dsid > 0 %then %do;
+19668 +%let vn_data =%sysfunc(varnum(&dsid, DATA));
+19669 +%let vn_key =%sysfunc(varnum(&dsid, KEY));
+19670 +%do %while(^ %sysfunc(fetch(&dsid)));
+19671 +     %let _key  = %sysfunc(getvarc(&dsid, &vn_key));
+19672 +     %if &_key eq TSIDMAP %then %do;
+19673 +          %let _tsidmap  = %sysfunc(getvarc(&dsid, &vn_data));
+19674 +     %end;
+19675 +%end;
+19677 +%let dsid = %sysfunc(close(&dsid));
+19678 +%end;
+19680 +%endline:
+19682 +%if &_tsidmap ne %then %do;
+19684 +%EM_REGISTER(KEY=TSIDMAP, TYPE=DATA);
+19685 +%EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+19687 +%if %sysfunc(exist(&_tsidmap)) %then %do;
+19688 +         data &EM_USER_TSIDMAP;
+19689 +               set &_tsidmap;
+19690 +         run;
+19691 +    %end;
+19692 +%end;
+19693 +%MEND EM_TS_GETTSIDMAP;
+19695 +/*------------------------------------------------------------------*/
+19700 +%MACRO EM_TS_GET_STAT(data=, var=, stat=, value=);
+19701 +%global &value;
+19704 +%let dsid = %sysfunc(open(&data));
+19705 +%if &dsid > 0 %then %do;
+19706 +    %let vn_var =%sysfunc(varnum(&dsid, &var));
+19707 +    %if &vn_var < 1 %then %do;
+19708 +        %let &value = 0;
+19709 +        %let dsid = %sysfunc(close(&dsid));
+19710 +        %goto endline;
+19711 +    %end;
+19712 +%let dsid = %sysfunc(close(&dsid));
+19713 +%end;
+19715 +%let _tmp=_tmpDS;
+19716 +proc means data=&data &stat;
+19717 +     var &var;
+19718 +     output out=&_tmp;
+19719 +run;
+19721 +%let dsid = %sysfunc(open(&_tmp));
+19722 +%if &dsid > 0 %then %do;
+19723 +     %let vn_var =%sysfunc(varnum(&dsid, &var));
+19724 +     %let vn_stat =%sysfunc(varnum(&dsid, _STAT_));
+19725 +     %do %while(^%sysfunc(fetch(&dsid)));
+19726 +         %let _stat  = %sysfunc(getvarc(&dsid, &vn_stat));
+19727 +         %if &_stat eq &stat %then %do;
+19728 +            %let &value  = %sysfunc(getvarn(&dsid, &vn_var));
+19729 +          %end;
+19730 +      %end;
+19731 +%let dsid = %sysfunc(close(&dsid));
+19732 +%end;
+19733 +proc datasets lib=work nolist;
+19734 + delete &_tmp;
+19735 +run;
+19736 +%endline:
+19737 +%MEND EM_TS_GET_STAT;
+19740 +%MACRO EM_TS_GET_VAR_FORMAT(data=, var=, format=, informat=);
+19741 +%global &format;
+19742 +%global &informat;
+19743 +%let dsid = %sysfunc(open(&data));
+19744 +%if &dsid > 0 %then %do;
+19745 +%let vn_var =%sysfunc(varnum(&dsid, &var));
+19746 +%if &vn_var > 0 %then %do; /* may causing a problem at this %if */
+19747 +   %let &format  = %sysfunc(varfmt(&dsid, &vn_var));
+19748 +   %let &informat  = %sysfunc(varinfmt(&dsid, &vn_var));
+19749 +%end;
+19750 +%let dsid = %sysfunc(close(&dsid));
+19751 +%end;
+19752 +%MEND EM_TS_GET_VAR_FORMAT;
+19754 +%Macro EM_TS_DELETE_DATA(lib=, dsname=);
+19755 +      %if &lib eq %then %let lib=work;
+19756 +       proc datasets lib=&lib nolist;
+19757 +              delete &dsname;
+19758 +       run;
+19759 +%Mend  EM_TS_DELETE_DATA;
+19762 +%macro EM_TS_GetNObs(inds=, nobs=);
+19763 +    %global &nobs;
+19764 +    %let &nobs=0;
+19765 +    data _null_;
+19766 +        set &inds end=eof;
+19767 +        if eof then call symput("&nobs", _N_);
+19768 +    run;
+19769 +    quit;
+19771 +    /*
+19772 +    %let dsid=%sysfunc(open(&outdata));
+19773 +    %if dsid > 0 %then %do;
+19774 +        %let _extobs = %sysfunc(attrn(&dsid, NOBS));
+19775 +        %let dsid = %sysfunc(close(&dsid));
+19776 +     %end;
+19777 +    */
+19778 +%mend  EM_TS_GetNObs;
+19781 +%MACRO EM_TS_GET_TIME_VALUES(data=, time1=, time2=, default=);
+19782 +%global &time1;
+19783 +%global &time2;
+19784 +%if &default = Y %then %do;
+19785 +   data _null_;
+19786 +        set &data end=eof;
+19787 +        if _N_ = 1 then  call symput("&time1", DATE);
+19788 +        if eof then call symput("&time2", DATE);
+19789 +    run;%end;
+19790 +%else %do;
+19791 +    %let dsid = %sysfunc(open(&data));
+19792 +    %if &dsid > 0 %then %do;
+19793 +        %let vn_date =%sysfunc(varnum(&dsid, DATE));
+19794 +        %let vn_index =%sysfunc(varnum(&dsid, _INDEX_));
+19795 +        %do %while(^%sysfunc(fetch(&dsid)));
+19796 +             %let _index  = %sysfunc(getvarn(&dsid, &vn_index));
+19797 +             %if &_index eq 1 %then %do;
+19798 +                %let &time1  = %sysfunc(getvarn(&dsid, &vn_date));
+19799 +             %end;
+19800 +             %if &_index eq 2 %then %do;
+19801 +                %let &time2  = %sysfunc(getvarn(&dsid, &vn_date));
+19802 +             %end;
+19803 +        %end;
+19804 +    %let dsid = %sysfunc(close(&dsid));
+19805 +    %end;
+19806 +%end;
+19808 +%MEND EM_TS_GET_TIME_VALUES;
+19810 +%MACRO EM_TS_GET_VAR_EXIST(data=, var=, exist=);
+19811 +%global &exist;
+19812 + %let &exist = N;
+19813 +%let dsid = %sysfunc(open(&data));
+19814 +%if &dsid > 0 %then %do;
+19815 +%let vn_var =%sysfunc(varnum(&dsid, &var));
+19816 +%if &vn_var > 0 %then %do;
+19817 +    %let &exist = Y;
+19818 +%end;
+19819 +%let dsid = %sysfunc(close(&dsid));
+19820 +%end;
+19821 +%MEND EM_TS_GET_VAR_EXIST;
+19824 +%macro EM_TS_MakeConstellPlotData(intreedata=, outnode=, outlink=);
+19825 +data  &outlink &outnode(keep=_NAME_ NodeType LinkID);
+19826 +      set &intreedata;
+19827 +        LENGTH NodeType $32;
+19828 +      if _PARENT_ eq " " then delete;
+19829 +        if _INPUT_ ne " " then NodeType = "VARIABLE";
+19830 +        else NodeType = "CLUSTER";
+19831 +        LinkID = _N_;
+19832 +run;
+19833 +%Mend EM_TS_MakeConstellPlotData;
+19838 +%macro EM_TS_CreateIDMap(
+19839 +/*-------------------------------------------------------------------------*/
+19840 +/*---   Written by Xiangxiang Meng                                         */
+19841 +/*-------------------------------------------------------------------------*/
+19842 +inDS          =,      /* imported data set in TS data mining               */
+19843 +outIDMap      =,      /* output data set of TS ID map                      */
+19844 +outDS         =,      /* output data set of TS and TS ID merged            */
+19845 +variableSet   =,      /* EM variable set                                   */
+19846 +TSIDbyCrossID =Y,
+19847 +inEM          =Y
+19848 +/*-------------------------------------------------------------------------*/
+19849 +);
+19851 +%global EM_TS_ERR;
+19852 +%let EM_TS_ERR = 0;
+19854 +%if &inEM eq Y %then %do;
+19855 +    %let num_crossIDVar = &EM_NUM_CROSSID;
+19856 +    proc sql noprint;
+19857 +        select name into :timeIDVar from &variableset where upcase(role) eq 'TIMEID';
+19858 +    quit;
+19859 +%end;
+19860 +%else %do;
+19861 +    proc sql noprint;
+19862 +         select count(*) into :num_crossIDVar from &variableSet
+19863 +             where upcase(role) eq "CROSSID" and upcase(use) in ('Y' 'D')
+19864 +         ;
+19865 +         select name into :timeIDVar from &variableset where upcase(role) eq 'TIMEID'
+19866 +         ;
+19867 +    quit;
+19868 +    %let num_crossIDVar=&num_crossIDVar;
+19869 +%end;
+19871 +* see if _TSID_ exists;
+19873 +proc contents data=&inDS noprint out=_emtscm_contents(keep=name);
+19874 +run;
+19876 +proc sql noprint;
+19877 +    select count(*) into :has_TSID
+19878 +        from _emtscm_contents
+19879 +        where upcase(strip(name)) eq '_TSID_'
+19880 +    ;
+19881 +quit;
+19883 +/*-------------------------------------------------------------------------*/
+19884 +* Creating TSID map..;
+19885 +/*-------------------------------------------------------------------------*/
+19887 +%if (&num_crossIDVar gt 0) %then %do;
+19889 +    data _emtscm_tmpIDMap;
+19890 +        set &variableSet;
+19891 +        where  (upcase(strip(level)) eq 'INTERVAL')
+19892 +              and ( (upcase(strip(role)) eq 'INPUT' and upcase(strip(use)) in ('Y' 'D'))
+19893 +                 or (upcase(strip(role)) eq 'REJECTED' and upcase(strip(use)) eq 'Y')
+19894 +                 or (upcase(strip(role)) eq 'TARGET' and upcase(strip(use)) in ('Y' 'D'))
+19895 +          );
+19896 +        _emts_dummy=1;
+19897 +        keep name label role _emts_dummy;
+19898 +    run;
+19900 +    proc sql noprint;
+19901 +        * create a string of crossID variable like A,B,C,D..;
+19902 +        select distinct name into :crossIDVar separated by ','
+19903 +            from &variableSet
+19904 +            where upcase(role) eq "CROSSID" and upcase(use) in ('Y' 'D')
+19905 +            order by name
+19906 +        ;
+19907 +        select distinct name into :IDVar1-:IDVar&num_crossIDVar
+19908 +            from &variableSet
+19909 +            where upcase(role) eq "CROSSID" and upcase(use) in ('Y' 'D')
+19910 +            order by name
+19911 +        ;
+19912 +        * create the TSID map data set;
+19913 +        create table _emtscm_tmp1 as
+19914 +            select distinct &crossIDVar, 1 as _emts_dummy from &inDS
+19915 +        ;
+19916 +        * create a level list of cross ID variables and time series variables;
+19917 +        create table &outIDMap as
+19918 +            select distinct a.name as _NAMEID_ format=$32., a.role as _role_, a.label as _LABELID_ format=$200., &crossIDVar
+19919 +            from _emtscm_tmpIDMap as a, _emtscm_tmp1 as b
+19920 +            where a._emts_dummy eq b._emts_dummy
+19921 +            order by a.name, &crossIDVar
+19922 +        ;
+19923 +    quit;
+19925 +    %if &TSIDbyCrossID = Y %then %do;
+19926 +        * create unique TSID only by Cross ID;
+19927 +        data &outIDMap;
+19928 +            length _TSID_ 8;
+19929 +            set &outIDMap;
+19930 +            by _NAMEID_;
+19931 +            if first._NAMEID_
+19932 +                then _TSID_=1;
+19933 +                else _TSID_+1;
+19934 +        run;
+19935 +        %if "&outDS" ne "" %then %do;
+19936 +            * merge TSID into &inDS;
+19937 +            proc sql noprint;
+19938 +                create table &outDS as
+19939 +                    select a.*, b._TSID_ label="%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_tsid, noquote))"
+19940 +                    from &inDS%if &has_TSID gt 0 %then %do;(drop=_TSID_)%end;   as a,
+19941 +                        (select distinct _TSID_, &crossIDVar from &outIDMap)    as b
+19942 +                        where %do i = 1 %to &num_crossIDVar;
+19943 +                                 (a.&&&IDVar&i eq b.&&&IDVar&i) and
+19944 +                              %end;
+19945 +                             b._TSID_ is not missing
+19946 +                    order by b._TSID_, a.&timeIDVar
+19947 +                ;
+19948 +            quit;
+19949 +        %end;
+19950 +    %end;
+19951 +    %else %do;
+19952 +        * create unique TSID by Cross ID and _NAMEID_;
+19953 +        data &outIDMap;
+19954 +            length _TSID_ 8;
+19955 +            set &outIDMap;
+19956 +            _TSID_=_n_;
+19957 +        run;
+19958 +        %if "&outDS" ne "" %then %do;
+19959 +            *no merge in this output;
+19960 +            data &outDS;
+19961 +                set &inDS;
+19962 +            run;
+19963 +        %end;
+19964 +    %end;
+19966 +    proc sort data=&outIDMap;
+19967 +        by _NAMEID_ _TSID_;
+19968 +    data &outIDMap(rename=(_NAMEID2_=_NAMEID_));
+19969 +        format _TSID_ best12. _NAMEID2_ $40.;
+19970 +        set &outIDMap;
+19971 +        by _NAMEID_;
+19972 +        if first._NAMEID_
+19973 +            then _emts_ind=1;
+19974 +            else _emts_ind+1;
+19975 +        drop _emts_ind;
+19976 +        rename _NAMEID_=_VARNAME_;
+19977 +        _NAMEID2_=catx('_',_NAMEID_,_emts_ind);
+19978 +        if _labelID_ eq ' '
+19979 +            then _labelID_ = catx(' ',_NAMEID_,_emts_ind);
+19980 +            else _labelID_ = catx(' ',_labelID_,_emts_ind);
+19981 +    run;
+19983 +    %EM_TS_DELETE_DATA(lib=work, dsname=_emtscm:);
+19985 +%end;
+19986 +%else %do; /* if no crossid's the nameid needs to be created */
+19988 +    data &outIDMap(keep=_NAMEID_ _ROLE_ _TSID_ _LABELID_);
+19989 +        length _TSID_ 8;
+19990 +        set &variableSet;
+19991 +        where  (upcase(strip(level)) eq 'INTERVAL')
+19992 +            and ( (upcase(strip(role)) eq 'INPUT' and upcase(strip(use)) in ('Y' 'D'))
+19993 +                 or (upcase(strip(role)) eq 'REJECTED' and upcase(strip(use)) eq 'Y')
+19994 +                 or (upcase(strip(role)) eq 'TARGET' and upcase(strip(use)) in ('Y' 'D'))
+19995 +          );
+19996 +        format _NAMEID_ $40. _VARNAME_ $32. _LABELID_ $200.;
+19997 +        rename ROLE = _ROLE_;
+19998 +        _NAMEID_=strip(name);
+19999 +        _VARNAME_=strip(name);
+20000 +        if label eq ' '
+20001 +            then _LABELID_ = strip(name);
+20002 +            else _LABELID_ = strip(label);
+20003 +        _TSID_=_n_;
+20004 +    run;
+20006 +    %if "&outDS" ne "" %then %do;
+20007 +        *no merge in this output;
+20008 +        data &outDS;
+20009 +            set &inDS;
+20010 +        run;
+20011 +    %end;
+20012 +%end;
+20014 +data &outIDMap;
+20015 +    set &outIDMap;
+20016 +    label _tsid_    = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_tsid, noquote))";
+20017 +    label _nameID_  = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_nameid, noquote))";
+20018 +    label _labelID_ = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_labelid, noquote))";
+20019 +    label _varname_ = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_tsvarname, noquote))";
+20020 +run;
+20022 +proc datasets lib=work nolist;
+20023 +    delete _emtscm_:;
+20024 +run; quit;
+20026 +%mend EM_TS_createIDMap;
+20028 +%macro EM_TS_CreateMetaData(
+20029 +/*-------------------------------------------------------------------------*/
+20030 +  inDS          =,      /* imported data set in TS data mining             */
+20031 +  outDS         =,      /* output data set of TS metadata                  */
+20032 +  variableSet   =,      /* EM variable set                                 */
+20033 +  timeInterval  =,      /* time interval                                   */
+20034 +  rc            =       /* return code                                     */
+20035 +/*-------------------------------------------------------------------------*/
+20036 +);
+20038 +%if %eval(
+20039 +      &EM_NUM_BINARY_INPUT   +
+20040 +      &EM_NUM_ORDINAL_INPUT  +
+20041 +      &EM_NUM_NOMINAL_INPUT  +
+20042 +      &EM_NUM_BINARY_REJECTED   +
+20043 +      &EM_NUM_ORDINAL_REJECTED  +
+20044 +      &EM_NUM_NOMINAL_REJECTED  +
+20045 +      &EM_NUM_ORDINAL_TARGET  +
+20046 +      &EM_NUM_NOMINAL_TARGET +
+20047 +      &EM_NUM_BINARY_TARGET
+20048 +      ) > 0
+20049 +%then %do;
+20050 +        %let  EMEXCEPTIONSTRING = exception.server.tsdm.useonlyintervalinputtarget;
+20051 +        %put &em_codebar;
+20052 +        %let errormsg = %sysfunc(sasmsg(sashelp.dmine,TSDM.USEONLYINTERVALINPUTTARGET_ERR , NOQUOTE));
+20053 +        %put &errormsg;
+20054 +        %put &em_codebar;
+20055 +        %goto ENDLINE;
+20056 +%end;
+20058 +%global EM_TS_ERR;
+20059 +%let EM_TS_ERR = 0;
+20061 +%if &timeInterval eq AUTO
+20062 +    %then %let timeInterval  = ;
+20063 +    %else %let timeInterval  = %upcase(&timeInterval);
+20065 +/*-------------------------------------------------------------------------*/
+20066 +* check time ID variable;
+20067 +/*-------------------------------------------------------------------------*/
+20069 +* number of variables in the Variableset with ROLE=TIMEID;
+20070 +proc sql noprint;
+20071 +    select count(*) into :num_timeID from &variableset
+20072 +        where upcase(role) eq 'TIMEID';
+20073 +quit;
+20075 +/*-------------------------------------------------------------------------*/
+20076 +* process only when there is one Time ID, otherwise exception message;
+20077 +/*-------------------------------------------------------------------------*/
+20079 +%if &num_timeID eq 0 %then %do;
+20081 +    %let EMEXCEPTIONSTRING = exception.server.METADATA.USE1TIMEID;
+20082 +    %let EM_TS_ERR = 11;
+20083 +    %put &em_codebar;
+20084 +    %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.USE1TIMEID_ERR, NOQUOTE));
+20085 +    %put &errormsg;
+20086 +    %put &em_codebar;
+20087 +    %goto tscm_endline;
+20089 +%end;
+20090 +%else %if &num_timeID gt 1 %then %do;
+20092 +    %let EMEXCEPTIONSTRING = exception.server.tsdm.useonlyonetimeid ;
+20093 +    %let EM_TS_ERR = 12;
+20094 +    %put &em_codebar;
+20095 +    %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.USEONLYONETIMEID_ERR, NOQUOTE));
+20096 +    %put &errormsg;
+20097 +    %put &em_codebar;
+20098 +    %goto tscm_endline;
+20100 +%end;
+20101 +%else %do;
+20102 +    *** proceed when there is one Time ID;
+20104 +    data _null_;
+20105 +        set &variableset(where=(upcase(role)='TIMEID'));
+20106 +        call symput('timeIDFormat',     strip(format));
+20107 +        call symput('timeID',           strip(upcase(name)      ));
+20108 +        call symput('timeIDLevel',      strip(upcase(level))     );
+20109 +        call symput('timeIDFormatType', strip(upcase(formattype)));
+20110 +    run;
+20112 +    *** exception message if the time ID is not an interval variable;
+20113 +    %if &timeIDLevel ne INTERVAL %then %do;
+20114 +        %let EMEXCEPTIONSTRING = exception.server.tsdm.useintervaltimeid;
+20115 +        %let EM_TS_ERR = 13;
+20116 +        %put &em_codebar;
+20117 +        %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.USEINTERVALTIMEID_ERR, NOQUOTE));
+20118 +        %put &errormsg;
+20119 +        %put &em_codebar;
+20120 +        %goto tscm_endline;
+20121 +    %end;
+20123 +    %if (&timeIDFormatType ne DATETIME) and
+20124 +        (&timeIDFormatType ne DATE) and
+20125 +        (&timeIDFormatType ne TIME) and
+20126 +        (&timeIDFormatType ne USER)
+20127 +    %then %do;
+20128 +        *** sequential format-type of time ID;
+20130 +        %let timeInterval = DAY;
+20131 +        %let timeIDFormatType = SEQ;
+20133 +        proc sql noprint;
+20134 +            create table _emtscm_inds as
+20135 +                 select distinct &timeID from &inDS(keep=&timeID)
+20136 +                 where &timeID is not missing;
+20137 +            select count(*) into :num_nonInteger from _emtscm_inds
+20138 +                where &timeID ne int(&timeID);
+20139 +        quit;
+20141 +        %if &num_nonInteger gt 0 %then %do;
+20142 +            %let EMEXCEPTIONSTRING = exception.server.tsdm.useonlyintegerforseqtimeID;
+20143 +            %let EM_TS_ERR = 14;
+20144 +            %put &em_codebar;
+20145 +            %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.USEONLYINTEGERFORSEQTIMEID_ERR, NOQUOTE));
+20146 +            %put &errormsg;
+20147 +            %put &em_codebar;
+20148 +            %goto tscm_endline;
+20149 +        %end;
+20150 +    %end;
+20151 +    %else %do;
+20152 +        *** date, datetime, time format-type of time ID;
+20154 +        *** must have a format;
+20155 +        %if ( &timeIDFormat = ) or  ( &timeIDFormat = .) %then %do;
+20156 +            %let  EMEXCEPTIONSTRING = exception.server.tsdm.invalidtimeidformat;
+20157 +            %let EM_TS_ERR = 15;
+20158 +            %put &em_codebar;
+20159 +            %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.INVALIDTIMEIDFORMAT_ERR, NOQUOTE));
+20160 +            %put &errormsg;
+20161 +            %put &em_codebar;
+20162 +            %goto tscm_endline;
+20163 +        %end;
+20165 +         *** time intervals that are shorter than DAY cannot be used for a DATE timeID variable;
+20166 +        %if (&timeIDFormatType eq DATE) and (&timeInterval ne ) %then %do;
+20167 +            %if (&timeInterval eq HOUR) or (&timeInterval eq MINUTE) or (&timeInterval eq SECOND) %then %do;
+20168 +                %let  EMEXCEPTIONSTRING = exception.server.tsdm.invalidtimeintervalfordate;
+20169 +                %let EM_TS_ERR = 16;
+20170 +                %put &em_codebar;
+20171 +                %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.INVALIDTIMEINTERVALFORDATE_ERR, NOQUOTE));
+20172 +                %put &errormsg;
+20173 +                %put &em_codebar;
+20174 +                %goto tscm_endline;
+20175 +            %end;
+20176 +        %end;
+20178 +        *** time intervals that are longer than HOUR cannot be used for a TIME timeID variable;
+20179 +        %if (&timeIDFormatType eq TIME) and (&timeInterval ne ) %then %do;
+20180 +            %if (&timeInterval ne HOUR) and (&timeInterval ne MINUTE) and (&timeInterval ne SECOND) %then %do;
+20181 +                %let  EMEXCEPTIONSTRING = exception.server.tsdm.invalidtimeintervalfortime;
+20182 +                %let EM_TS_ERR = 17;
+20183 +                %put &em_codebar;
+20184 +                %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.INVALIDTIMEINTERVALFORTIME_ERR, NOQUOTE));
+20185 +                %put &errormsg;
+20186 +                %put &em_codebar;
+20187 +                %goto tscm_endline;
+20188 +            %end;
+20189 +        %end;
+20191 +        *** the AUTO function is currently turned off for TIME timeID variable;
+20192 +        %if (&timeIDFormatType eq TIME) and (&timeInterval eq ) %then %do;
+20193 +            %let  EMEXCEPTIONSTRING = exception.server.tsdm.noautointervalfortime;
+20194 +            %let EM_TS_ERR = 18;
+20195 +            %put &em_codebar;
+20196 +            %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.NOAUTOINTERVALFORTIME_ERR, NOQUOTE));
+20197 +            %put &errormsg;
+20198 +            %put &em_codebar;
+20199 +            %goto tscm_endline;
+20200 +        %end;
+20202 +        %if (&timeInterval ne ) and (&timeIDFormatType eq DATETIME)
+20203 +            %then %let timeInterval =DT&timeInterval;
+20205 +        proc sql noprint;
+20206 +            create table _emtscm_inds as select distinct &timeID from &inDS(keep=&timeID)
+20207 +                where &timeID is not missing;
+20208 +        quit;
+20209 +    %end;
+20211 +    proc timeid data=_emtscm_inds outinterval=_emtscm_meta;
+20212 +        id &timeID %if &timeInterval ne %then %do; interval=&timeinterval %end;;
+20213 +    run;
+20215 +    %let hasValidInterval = 0;
+20216 +    %let hasLengthOne     = 0;
+20218 +    proc sql noprint;
+20219 +        create table _emtscm_label as
+20220 +            select name,label
+20221 +            from dictionary.columns
+20222 +            where libname eq "WORK" and memname eq "_EMTSCM_INDS"
+20223 +        ;
+20224 +        create table _emtscm_meta2 as
+20225 +            select a.*, b.label
+20226 +            from _emtscm_meta as a, _emtscm_label as b
+20227 +            where upcase(a.timeID) eq upcase(b.name)
+20228 +        ;
+20229 +    quit;
+20231 +    data &outDS;
+20232 +        set _emtscm_meta2;
+20233 +        format
+20234 +            timeformat      $30.
+20235 +            role            $10.
+20236 +            start           &timeIDformat
+20237 +            end             &timeIDformat
+20238 +            apply_start_end $8.
+20239 +        ;
+20240 +        rename
+20241 +            timeID      = name
+20242 +            seasonality = lengthOfCycle
+20243 +            interval    = timeinterval
+20244 +        ;
+20245 +        keep timeID role seasonality interval timeformat start end apply_start_end timeformattype label;
+20247 +        role            = "TIMEID";
+20248 +        apply_start_end = 'N';
+20249 +        timeformat      = symget('timeIDformat');
+20250 +        timeformattype  = symget('timeIDformatType');
+20252 +        label  timeID           = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_name,       noquote))";
+20253 +        label  role             = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_varrole,       noquote))";
+20254 +        label  seasonality      = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_lengthOfCycle, noquote))";
+20255 +        label  interval         = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_timeinterval,  noquote))";
+20256 +        label  timeformat       = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_timeformat,    noquote))";
+20257 +        label  start            = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_timestart,     noquote))";
+20258 +        label  end              = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_timeend,       noquote))";
+20259 +        label  apply_start_end  = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_applystartend, noquote))";
+20260 +        label  timeformattype   = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_timeformatype, noquote))";
+20261 +        label  label            = "%sysfunc(sasmsg(sashelp.dmine, meta_label_vlabel,      noquote))";
+20263 +        if timeformattype eq 'SEQ' then do;
+20264 +            timeformat='BEST12.';
+20265 +            seasonality=1;
+20266 +        end;
+20268 +        call symput('_tinterval',interval);
+20270 +        *** add SEMIMON WEEKDAY17W DTSEMIMON DTWEEKDAY17W 05092012;
+20272 +        if upcase(timeformattype) eq 'DATE' and
+20273 +           upcase(interval) in ('YEAR' 'SEMIYEAR' 'QTR' 'MONTH' 'SEMIMONTH' 'TENDAY' 'WEEK' 'WEEKDAY' 'DAY' 'SEMIMON' 'WEEKDAY17W')
+20274 +            then call symput('hasValidInterval',1);
+20276 +        if upcase(timeformattype) eq 'DATETIME' and
+20277 +           upcase(interval) in ('DTYEAR' 'DTSEMIYEAR' 'DTQTR' 'DTMONTH' 'DTSEMIMONTH' 'DTTENDAY'
+20278 +                              'DTWEEK' 'DTWEEKDAY' 'DTDAY' 'DTHOUR' 'DTMINUTE' 'DTSECOND' 'DTSEMIMON' 'DTWEEKDAY17W')
+20279 +            then call symput('hasValidInterval',1);
+20281 +        if upcase(timeformattype) eq 'TIME' and
+20282 +           upcase(interval) in ('HOUR' 'MINUTE' 'SECOND')
+20283 +            then call symput('hasValidInterval',1);
+20285 +        if upcase(timeformattype) eq 'SEQ'
+20286 +            then call symput('hasValidInterval',1);
+20288 +        if upcase(timeformattype) eq 'USER'
+20289 +            then call symput('hasValidInterval',1);
+20291 +        if start eq end
+20292 +            then call symput('hasLengthOne',1);
+20293 +    run;
+20295 +    %EM_TS_DELETE_DATA(lib=work, dsname=_em_tscm: );
+20297 +    *** detect any missing time interval after running PROC TIMEID;
+20298 +    %if &_tinterval eq %then %do;
+20299 +        %let EMEXCEPTIONSTRING = exception.server.TIMESERIES.INVALIDTIMEINTERVAL;
+20300 +        %let EM_TS_ERR = 19;
+20301 +        %put &em_codebar;
+20302 +        %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.INVALIDTIMEINTERVAL_ERR, NOQUOTE));
+20303 +        %put &errormsg;
+20304 +        %put &em_codebar;
+20305 +        %goto tscm_endline;
+20306 +    %end;
+20308 +    *** detect any missing time interval after running PROC TIMEID;
+20309 +    %if &hasValidInterval eq 0 %then %do;
+20310 +        %let EMEXCEPTIONSTRING = exception.server.TIMESERIES.CANNOTAUTODETECTTIMEINTERVAL;
+20311 +        %let EM_TS_ERR = 20;
+20312 +        %put &em_codebar;
+20313 +        %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.CANNOTAUTODETECTTIMEINTERVAL_ERR, NOQUOTE));
+20314 +        %put &errormsg;
+20315 +        %put &em_codebar;
+20316 +        %goto tscm_endline;
+20317 +    %end;
+20319 +    %if &hasLengthOne eq 1 %then %do;
+20320 +        %let EMEXCEPTIONSTRING = exception.server.TIMESERIES.TIMESERIESTOOSHORT;
+20321 +        %let EM_TS_ERR = 21;
+20322 +        %put &em_codebar;
+20323 +        %let errormsg = %sysfunc(sasmsg(sashelp.dmine, TSDM.TIMESERIESTOOSHORT_ERR, NOQUOTE));
+20324 +        %put &errormsg;
+20325 +        %put &em_codebar;
+20326 +        %goto tscm_endline;
+20327 +    %end;
+20329 +%end;
+20331 +%tscm_endline:;
+20333 +%mend EM_TS_CreateMetaData;
+20336 +%macro EM_TS_Time2Seq(inDS=,tsmeta=);
+20338 +data _null_;
+20339 +    set &tsmeta;
+20340 +    call symput('_timeidFormatType', timeformattype);
+20341 +    call symput('_timeid', strip(name));
+20342 +    call symput('_seqstartnum',strip(put(start,best12.)));
+20343 +run;
+20345 +proc contents data=&inDS noprint
+20346 +    out=_emts_tmpp1(keep=name label where=(upcase(name) eq "%upcase(&_timeID)"));
+20347 +run; quit;
+20349 +data _null_;
+20350 +    set _emts_tmpp1;
+20351 +    call symput('_timeIDlabel',label);
+20352 +run;
+20354 +%if &_timeidFormatType eq SEQ
+20355 +%then %do;
+20356 +    proc sql noprint;
+20357 +        select min(&_timeid) format=date9. into :_dummystarttime from &inDS;
+20358 +    quit;
+20359 +    %let _dummystarttime=&_dummystarttime;
+20361 +    data &inDS(rename=(_tsdp_tmpID=&_timeid));
+20362 +        set &inDS;
+20363 +        _tsdp_tmpID = intck('DAY',"&_dummystarttime"d,&_timeid)+&_seqstartnum;
+20364 +        drop &_timeid;
+20365 +        label _tsdp_tmpID = "&_timeIDlabel";
+20367 +    run;
+20368 +%end;
+20370 +%mend;
+20372 +%macro EM_TS_Datetime2Time(inDS=,tsmeta=);
+20374 +data _null_;
+20375 +    set &tsmeta;
+20376 +    call symput('_timeidFormatType', timeformattype);
+20377 +    call symput('_timeidFormat', timeformat);
+20378 +    call symput('_timeid', strip(name));
+20379 +    call symput('_timeinterval',strip(upcase(timeinterval)));
+20380 +run;
+20382 +/* manually change time ID format to a longer enough time format */
+20383 +/* because proc timeid returns time5. for second time interval */
+20384 +/* which is not long enough for transpose with time unit as seconds */
+20385 +%if &_timeinterval eq SECOND
+20386 +%then %do;
+20387 +    %let _timeIDformat = %str(time8.);
+20388 +%end;
+20390 +proc contents data=&inDS noprint
+20391 +    out=_emts_tmpp1(keep=name label where=(upcase(name) eq "%upcase(&_timeID)"));
+20392 +run; quit;
+20394 +data _null_;
+20395 +    set _emts_tmpp1;
+20396 +    call symput('_timeIDlabel',label);
+20397 +run;
+20399 +%if &_timeidFormatType eq TIME
+20400 +%then %do;
+20401 +    data &inDS(rename=(_tsdp_tmpID=&_timeid));
+20402 +        set &inDS;
+20403 +        _tsdp_tmpID = timepart(&_timeID);
+20404 +        format _tsdp_tmpID &_timeidFormat;
+20405 +        label  _tsdp_tmpID = "&_timeIDlabel";
+20406 +        drop &_timeid;
+20407 +    run;
+20408 +%end;
+20410 +%mend;
+20412 +%macro EM_TS_CreateTimeStartAndEnd(inDS=, outDS=, timeIDVar=, compare=N);
+20414 + proc sql noprint;
+20415 +     create table _tmptimetable as
+20416 +         select distinct &timeidvar as DATE from &inDS
+20417 +         where &timeIDVar is not missing
+20418 +         order by &timeIDVar;
+20419 + quit;
+20421 +%if &compare eq Y %then %do;
+20422 +    * compare with the existing time table;
+20423 +    proc compare data=&EM_USER_TIMESTARTANDEND(keep=DATE)
+20424 +        compare=_tmptimetable(keep=DATE) out=_tmpdiff outdif outnoequal noprint;
+20425 +    run;
+20427 +    %EM_TS_GetNObs(inds=_tmpdiff, nobs=_diffobs);
+20429 +    %if &_diffobs > 0 %then %do; /* create it again */
+20430 +        data &outDS(keep=DATE _INDEX_);
+20431 +            set _tmptimetable end = _eof_;
+20432 +            if _N_ = 1
+20433 +                then _INDEX_ = 1;
+20434 +                else _INDEX_ = 0;
+20435 +            if _eof_ then _INDEX_= 2;
+20436 +        run;
+20437 +    %end;
+20439 +    %EM_TS_DELETE_DATA(lib=work, dsname=_tmpdiff);
+20440 +    %EM_TS_DELETE_DATA(lib=work, dsname=_tmptimetable);
+20441 +%end;
+20442 +%else %do;
+20443 +    * create a new time table directly;
+20444 +    data &outDS(keep=DATE _INDEX_);
+20445 +        set _tmptimetable end = _eof_;
+20446 +        if _N_ = 1
+20447 +            then _INDEX_ = 1;
+20448 +            else _INDEX_ = 0;
+20449 +        if _eof_ then _INDEX_= 2;
+20450 +    run;
+20452 +    %EM_TS_DELETE_DATA(lib=work, dsname=_tmptimetable);
+20453 +%end;
+20455 +* assign a defult format BEST12. for sequential time ID;
+20457 +proc contents data=&outDS noprint out=_tmpcontents(keep=name format);
+20459 +%let _nodatefmt=N;
+20461 +data _null_;
+20462 +    set _tmpcontents;
+20463 +    where upcase(name) eq 'DATE';
+20464 +    if strip(format) eq ' ' then call symput('_nodatefmt','Y');
+20465 +run;
+20467 +%if "&_nodatefmt" eq "Y" %then %do;
+20468 +    data &outDS;
+20469 +        set &outDS;
+20470 +        format date best12.;
+20471 +    run;
+20472 +%end;
+20474 +%EM_TS_DELETE_DATA(lib=work, dsname=_tmpcontents);
+20476 +%mend;
+20480 +%macro EM_TS_Transpose(
+20481 +/*-------------------------------------------------------------------------*/
+20482 +  inDS          =,      /* imported data set in TS data mining             */
+20483 +  inIDMap       =,      /* input TS ID map                                 */
+20484 +  variableSet   =,      /* variable set                                    */
+20485 +  transposeBy   =,      /* byTSID or byTimeID                              */
+20486 +  outDS         =,      /* output transposed data set                      */
+20487 +  outIDMap      =,      /* output TS ID map for the new transposed data set*/
+20488 +  inEM          =Y,
+20489 +  timePrefix    =_T
+20490 +/*-------------------------------------------------------------------------*/
+20491 +);
+20493 +%let timePrefix = &timePrefix;
+20495 +%if  &EM_NUM_CROSSID > 0 %then %do;
+20497 +data _emtstp_map0(rename=(_VARNAME_=_NAMEID_));
+20498 +    set &inIDMap;
+20499 +    drop _NAMEID_;
+20500 +    run;
+20501 +%let inIDMap=_emtstp_map0;
+20503 +%end;
+20505 +proc sql noprint;
+20506 +    * number of TS Variables to be transposed;
+20507 +    select count(distinct _NAMEID_) into :num_TSVar from &inIDMap
+20508 +    ;
+20509 +    * number of TS Variables to be transposed;
+20510 +    select max(_TSID_) into :num_TSID from &inIDMap
+20511 +    ;
+20512 +    * name list of TS Variables;
+20513 +    select distinct _NAMEID_ into :TSVar1-:TSVar%left(&num_TSVar)
+20514 +        from &inIDMap
+20515 +        order by _NAMEID_
+20516 +    ;
+20517 +    * total number of time series =max(_TSID_)*&num_TSVar;
+20518 +    * and the number of digits of this variable is &num_digits;
+20519 +    select ceil(log(max(_TSID_)*&num_TSVar+1)/log(10)) into :num_digits
+20520 +        from &inIDMap
+20521 +    ;
+20522 +      * Time ID variable;
+20523 +    select name into:timeIDVar from &variableset
+20524 +        where upcase(role) eq 'TIMEID'
+20525 +    ;
+20526 +quit;
+20527 +%let num_digits = &num_digits;
+20528 +%let num_TS     = %eval(&num_TSVar*&num_TSID);
+20530 +/*-------------------------------------------------------------------------*/
+20532 +* get number of cross IDs and also the TIME ID variable name;
+20533 +%if &inEM eq Y %then %do;
+20534 +    %let num_crossIDVar = &EM_NUM_CROSSID;
+20535 +    %let crossIDVar     = %EM_CROSSID;
+20536 +%end;
+20537 +%else %do;
+20538 +    proc sql noprint;
+20539 +        * number of cross ID;
+20540 +        select count(*) into :num_crossIDVar
+20541 +            from &variableSet
+20542 +            where upcase(role) eq "CROSSID" and upcase(use) in ('Y' 'D')
+20543 +        ;
+20544 +        * create a string of crossID variable like A B C D..;
+20545 +        select distinct name into :crossIDVar separated by ' '
+20546 +            from &variableSet
+20547 +            where upcase(role) eq "CROSSID" and upcase(use) in ('Y' 'D')
+20548 +            order by name
+20549 +        ;
+20550 +    quit;
+20551 +    %let num_crossIDVar=&num_crossIDVar;
+20552 +%end;
+20554 +/*-------------------------------------------------------------------------*/
+20556 +%if (&num_crossIDVar gt 0) %then %do;
+20558 +    data _emtstp_tmpDat;
+20559 +        set &inDS(keep=%do i=1 %to &num_TSVar; &&&TSVar&i %end; &crossIDVar &timeIDVar _TSID_);
+20560 +        _NAMEID_ = cats("_TS_",_TSID_);
+20561 +        label %do i=1 %to &num_TSVar; &&&TSVar&i=" " %end; ;
+20562 +    run;
+20564 +    %if %upcase(&transposeBy) eq BYTSID %then %do;
+20566 +        * update the ID maps;
+20567 +        proc sort data=&inIDMap out=_emtstp_tmpmap;
+20568 +            by _NAMEID_ _TSID_;
+20569 +        data &outIDMap;
+20570 +            set _emtstp_tmpmap;
+20571 +            *_LABELID_ = catx(' ',_LABELID_,_TSID_);
+20572 +            _NAMEID_  = cats("_TS_",put(_N_,z&num_digits..));
+20573 +        run;
+20575 +        * get the names for the new variables;
+20576 +        proc sql noprint;
+20577 +            select strip(_NAMEID_) into :tsname1-:tsname%left(&num_TS) from &outIDMap
+20578 +            ;
+20579 +            select strip(_LABELID_) into :tslabel1-:tslabel%left(&num_TS) from &outIDMap
+20580 +            ;
+20581 +        quit;
+20583 +        * data must be sorted before transposed;
+20584 +        proc sort data=_emtstp_tmpDat;
+20585 +            by &timeIDvar;
+20586 +        run;
+20588 +        %do i = 1 %to &num_TSVar;
+20589 +            %let i = &i;
+20590 +            * transpose one cross-type time series data by TSID;
+20591 +            proc transpose data=_emtstp_tmpDat out=_emtstp_td&i(drop=_name_) prefix=_V_&i;
+20592 +                id _NAMEID_;
+20593 +                by &timeIDVar;
+20594 +                var &&&TSVar&i;
+20595 +            run;
+20596 +        %end;
+20598 +        * merge all vertical time series, rename and label them;
+20599 +        data &outDS;
+20600 +            merge %do i=1 %to &num_TSVar; _emtstp_td&i %end;;
+20601 +            by &timeIDVar;
+20602 +            rename
+20603 +                %do i = 1 %to &num_TSVar;
+20604 +                    %do j = 1 %to &num_TSID;
+20605 +                        %let num1 = %eval((&i-1)*&num_TSID+&j);
+20606 +                        /* %put &i &j &num1 &num_TSID; */
+20607 +                        _V_&i._TS_&j = &&&tsname&num1
+20608 +                    %end;
+20609 +                %end;
+20610 +            ;
+20611 +            label
+20612 +                %do i = 1 %to &num_TSVar;
+20613 +                    %do j = 1 %to &num_TSID;
+20614 +                        %let num1 = %eval((&i-1)*&num_TSID+&j);
+20615 +                        /* %put &i &j &num1 &num_TSID; */
+20616 +                        _V_&i._TS_&j = "%nrbquote(&&&tslabel&num1)"
+20617 +                    %end;
+20618 +                %end;
+20619 +            ;
+20620 +        run;
+20621 +    %end;
+20622 +    %else %do;
+20624 +        * update the ID maps;
+20625 +        proc sort data=&inIDMap out=_emtstp_tmpmap;
+20626 +            by _NAMEID_ _TSID_;
+20627 +        data &outIDMap;
+20628 +            set _emtstp_tmpmap;
+20629 +            *_LABELID_ = catx(' ',_LABELID_,_TSID_);
+20630 +            _NAMEID_  = cats("_TS_",put(_N_,z&num_digits..));
+20631 +        run;
+20633 +        proc sql noprint;
+20634 +            * get the roles for the new variables;
+20635 +            select distinct _role_ into :TSRole1-:TSRole%left(&num_TSVar)
+20636 +                from &inIDMap
+20637 +                order by _NAMEID_
+20638 +            ;
+20639 +            * get the length of the time series;
+20640 +            select count(distinct &timeIDvar) into :num_T
+20641 +                from _emtstp_tmpDat
+20642 +            ;
+20643 +        quit;
+20645 +        * data must be sorted before transposed;
+20646 +        proc sort data=_emtstp_tmpDat;
+20647 +            by _TSID_ &crossIDVar &timeIDvar;
+20648 +        run;
+20650 +        %do i = 1 %to &num_TSVar;
+20651 +            %let i = &i;
+20652 +            * transpose one cross-type time series data by TIMEID;
+20653 +            proc transpose data=_emtstp_tmpDat out=_emtstp_td&i(drop=_name_) prefix=&timePrefix;
+20654 +                by _TSID_ &crossIDVar;
+20655 +                var &&&TSVar&i;
+20656 +            run;
+20657 +        %end;
+20659 +        * stack all horizontal time series;
+20660 +        data &outDS;
+20661 +            format _TSID_ best12. _NAMEID_ $32. _ROLE_ $32.;
+20662 +            length %do t=1 %to &num_T; &timePrefix.&t 8 %end;;
+20663 +            set %do i=1 %to &num_TSVar; _emtstp_td&i(in=in&i) %end;;
+20664 +            %do i=1 %to &num_TSVar;
+20665 +                if in&i then do;
+20666 +                    _NAMEID_ ="&&&TSVar&i";
+20667 +                    _ROLE_   ="&&&TSRole&i";
+20668 +                end;
+20669 +            %end;
+20670 +            label _tsid_   = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_tsid, noquote))"   ;
+20671 +            label _nameID_ = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_nameid, noquote))" ;
+20672 +            label  role    = "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_varrole, noquote))";
+20673 +        run;
+20674 +    %end;
+20675 +%end;
+20676 +%else %do;
+20678 +    proc sql noprint;
+20679 +        select _NAMEID_ into :panelTSVar separated by ' ' from &inIDMap
+20680 +            order by _NAMEID_
+20681 +        ;
+20682 +    quit;
+20684 +    %if %upcase(&transposeBy) eq BYTSID %then %do;
+20685 +        * transpose the panel-type time series data by TSID;
+20686 +        proc sort data=&inDS out=_emtstp_tmpDat;
+20687 +            by &timeIDvar;
+20688 +        proc transpose data=_emtstp_tmpDat
+20689 +            out=_emtstp_tmpDat2(keep=&timeIDvar _name_ col1 rename=(_name_=_ts_tmpname_ col1=_TSVALUE_));
+20690 +            by &timeIDVar;
+20691 +            var &panelTSVar;
+20692 +        run;
+20693 +        proc datasets lib=work nolist;
+20694 +            modify _emtstp_tmpDat2;
+20695 +            label _TSVALUE_= "%sysfunc(sasmsg(sashelp.dmine, rpt_tsdm_tsvalue, noquote))";
+20696 +            run; quit;
+20697 +    %end;
+20698 +    %else %do;
+20699 +        * transpose the panel-type time series data by TIMEID;
+20700 +        proc sort data=&inDS out=_emtstp_tmpDat;
+20701 +            by &timeIDvar;
+20702 +        data _emtstp_tmpDat;
+20703 +            set _emtstp_tmpDat;
+20704 +            _tmp_ind=_n_;
+20705 +        proc transpose data=_emtstp_tmpDat prefix=&timePrefix
+20706 +            out=_emtstp_tmpDat2(keep=_name_ &timePrefix: rename=(_name_=_ts_tmpname_));
+20707 +            ID _tmp_ind;
+20708 +            var &panelTSVar;
+20709 +        run;
+20710 +    %end;
+20712 +      * merge ID maps to the transpose data set;
+20713 +      proc sql noprint;
+20714 +          create table &outDS(drop=_ts_tmpname_ _role_ _LABELID_ /*_TSID_*/ rename=(_NAMEID_=_TSNAME_)) as
+20715 +              select a.*, b.* from &inIDMap as a, _emtstp_tmpDat2 as b
+20716 +              where upcase(a._NAMEID_) eq upcase(b._ts_tmpname_)
+20717 +          ;
+20718 +      quit;
+20720 +      * update the TS ID map;
+20721 +      data &outIDMap;
+20722 +          set &inIDMap;
+20723 +      run;
+20724 +%end;
+20726 +proc datasets lib=work nolist;
+20727 +    delete _emtstp:;
+20728 +run; quit;
+20730 +%mend EM_TS_Transpose;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMTSDM.TSESM_SCORE.SOURCE.
+20732 +/*----------------------------------------------------------------------------------+
+20733 + |
+20734 + |   Title :  TS ESM Node
+20735 + |
+20736 + |   SUPPORT: Taiyeong Lee (Taiyeong.Lee@sas.com)
+20737 + |
+20738 + +-----------------------------------------------------------------------------------*/
+20740 +%macro EM_TSESM_SCORE;
+20742 +    /* the case when Targets and Inputs have the same format, apply the format to the output statistics*/
+20743 +    /* defect S1014292 */
+20744 +    %global  _seriesFormat;
+20745 +    %let _seriesFormat =;
+20746 +    proc sql noprint;
+20747 +        select count(distinct format) into :_numSeriesFormat
+20748 +        from &EM_DATA_VARIABLESET
+20749 +        where upcase(role) eq 'TARGET' or upcase(role) eq 'INPUT' and upcase(strip(use)) in ('Y' 'D');
+20750 +    quit;
+20751 +    %if &_numSeriesFormat = 1 %then %do;
+20752 +        proc sql noprint;
+20753 +            select distinct format into :_seriesFormat
+20754 +            from &EM_DATA_VARIABLESET
+20755 +            where upcase(role) eq 'TARGET' or upcase(role) eq 'INPUT' and upcase(strip(use)) in ('Y' 'D');
+20756 +        quit;
+20757 +    %end;
+20759 +   /* When Forecast Input Time Series is Yes, Output Data Type is always Default */
+20760 +   %let _EXPORTDATA = &EM_PROPERTY_EXPORTDATA;
+20761 +   %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+20762 +      %let _EXPORTDATA = DEFAULT  ;
+20763 +   %end;
+20766 +    %EM_GETNAME(KEY=OUTFORCST, TYPE=DATA);
+20767 +    %EM_GETNAME(KEY=FORCSTPLOTDS, TYPE=DATA);
+20770 +%if &EM_PROPERTY_PLOTLENGTH ne MAX %then %do;
+20773 +    %if &EM_PROPERTY_PLOTLENGTH eq DEFAULT %then %do;
+20774 +        %let _nobs = 0;
+20775 +        %let dsid=%sysfunc(open(&EM_USER_OUTFORCST));
+20776 +        %if dsid > 0 %then %do;
+20777 +            %let _nobs = %sysfunc(attrn(&dsid, NOBS));
+20778 +            %let dsid = %sysfunc(close(&dsid));
+20779 +        %end;
+20781 +        %if &_nobs > 20000 %then %let _PLOTLENGTH = 3;
+20782 +        %else %let _PLOTLENGTH = MAX;
+20784 +    %end;
+20785 +    %else %do;
+20786 +        %let _PLOTLENGTH = &EM_PROPERTY_PLOTLENGTH;
+20787 +    %end;
+20789 +    %if &_PLOTLENGTH ne MAX %then %do;
+20790 +         %let _timeidvar =%EM_TIMEID;
+20791 +         data _tmptimeds;
+20792 +            set   &EM_USER_OUTFORCST ;
+20793 +            keep=&_timeidvar;
+20794 +         run;
+20795 +         proc sql;
+20796 +              create table _tmptimeds2
+20797 +              as
+20798 +             select distinct(_tmptimeds.&_timeidvar) from _tmptimeds;
+20799 +         run;
+20800 +         quit;
+20802 +         proc sort data=_tmptimeds2   out= _tmptimeds2  ;
+20803 +              by descending &_timeidvar;
+20804 +         run;
+20805 +         %let _nplot =%sysevalf(&EM_PROPERTY_FCLEAD * (1+ &_PLOTLENGTH));
+20807 +         %let _ntimeid = 0;
+20808 +         %let dsid=%sysfunc(open(work._tmptimeds2));
+20809 +         %if dsid > 0 %then %do;
+20810 +             %let _ntimeid = %sysfunc(attrn(&dsid, NOBS));
+20811 +             %let dsid = %sysfunc(close(&dsid));
+20812 +         %end;
+20813 +         %if &_ntimeid > &_nplot %then %do;
+20814 +             data _null_;
+20815 +                 set _tmptimeds2;
+20816 +                 if _N_ eq &_nplot then do;
+20817 +                 call symput("_start", &_timeidvar);
+20818 +                 end;
+20819 +             run;
+20821 +             data &EM_USER_FORCSTPLOTDS;
+20822 +               set  &EM_USER_OUTFORCST;
+20823 +               if &_timeidvar >= &_start then output;
+20824 +             run;
+20825 +         %end;
+20826 +         %else %do;
+20827 +               data &EM_USER_FORCSTPLOTDS;
+20828 +                    set  &EM_USER_OUTFORCST;
+20829 +               run;
+20830 +         %end;
+20831 +    %end; /* end of %if &_PLOTLENGTH ne MAX %then %do; */
+20832 +    %else %do;
+20833 +         data &EM_USER_FORCSTPLOTDS;
+20834 +              set  &EM_USER_OUTFORCST;
+20835 +         run;
+20836 +    %end;
+20838 +%end; /* end of ne MAX */
+20839 +%else %do;
+20840 +    data &EM_USER_FORCSTPLOTDS;
+20841 +         set  &EM_USER_OUTFORCST;
+20842 +    run;
+20843 +%end;  /* end of eq Max  */
+20845 +/* Apply series format */
+20846 +    /* defect S1014292 */
+20847 +%if &_seriesFormat ^= %then %do;
+20849 +    data &EM_USER_FORCSTPLOTDS;
+20850 +         set  &EM_USER_FORCSTPLOTDS;
+20851 +         format ACTUAL &_seriesFormat;
+20852 +         format PREDICT &_seriesFormat;
+20853 +         format LOWER &_seriesFormat;
+20854 +         format UPPER &_seriesFormat;
+20855 +         format ERROR &_seriesFormat;
+20856 +         format STD &_seriesFormat;
+20857 +    run;
+20860 +%end;
+20862 +%EM_TS_DELETE_DATA(lib=work, dsname=_tmptimeds);
+20863 +%EM_TS_DELETE_DATA(lib=work, dsname=_tmptimeds2);
+20867 +/* moved from training macro by ruzhan */
+20869 +   %EM_GETNAME(KEY=OUTPRED, TYPE=DATA);
+20870 +   %EM_GETNAME(KEY=OUTSUM, TYPE=DATA);
+20871 +   %EM_GETNAME(KEY=OUTDATA, TYPE=DATA);
+20872 +   %EM_GETNAME(KEY=OUTLIER, TYPE=DATA);
+20873 +   %EM_GETNAME(KEY=OUTKLD, TYPE=DATA);
+20874 +   %EM_GETNAME(KEY=TSIDMAP, TYPE=DATA);
+20876 +/* Apply series format */
+20877 +    /* defect S1014292 */
+20878 +%if &_seriesFormat ^= %then %do;
+20880 +    data &EM_USER_OUTSUM;
+20881 +        set  &EM_USER_OUTSUM;
+20882 +        format MIN &_seriesFormat;
+20883 +        format MAX &_seriesFormat;
+20884 +        format MEAN &_seriesFormat;
+20885 +        format STDDEV &_seriesFormat;
+20886 +        format PREDICT &_seriesFormat;
+20887 +        format LOWER &_seriesFormat;
+20888 +        format UPPER &_seriesFormat;
+20889 +        format STD &_seriesFormat;
+20890 +        %let _lead_num_ = 1;
+20891 +        %do %while (&_lead_num_ <= &em_property_FCLead);
+20892 +            %let _FCLead_ = _LEAD&_lead_num_._;
+20893 +            format &_FCLead_ &_seriesFormat;
+20894 +            %let _lead_num_ = %eval(&_lead_num_ +1);
+20895 +        %end;
+20897 +    run;
+20900 +%end;
+20903 +   /*---------- Check and assign the input data set --------------------------*/
+20906 +    %let _EXPORT_DATA  = ;
+20907 +    %let _FILE_CDELTA  = ;
+20909 +    %if &EM_IMPORT_DATA ne  %then %do;
+20911 +           %let _EXPORT_DATA   = &EM_EXPORT_TRAIN;
+20912 +           %let _FILE_CDELTA  =  &EM_FILE_CDELTA_TRAIN;
+20914 +    %end;
+20915 +    %else %if &EM_IMPORT_TRANSACTION ne  %then %do;
+20917 +           %let _EXPORT_DATA  =  &EM_EXPORT_TRANSACTION;
+20918 +           %let _FILE_CDELTA  =  &EM_FILE_CDELTA_TRANSACTION;
+20919 +    %end;
+20920 +    %else %do;
+20921 +           %let  EMEXCEPTIONSTRING = exception.server.tsdm.noinputdata;
+20922 +           %goto ENDLINE;
+20923 +    %end;
+20927 +   %if &_EXPORTDATA eq KLD %then %do;
+20928 +       %if  &EM_PROPERTY_CLUSLEADPOINT > %eval(&EM_PROPERTY_FCLEAD-&EM_PROPERTY_FCBACK) %then %do;
+20929 +           %put &em_codebar;
+20930 +           %let errormsg = %sysfunc(sasmsg(sashelp.dmine, tsdm.invalidleadpointforkld_err, NOQUOTE));
+20931 +           %put &errormsg;
+20932 +           %put &em_codebar;
+20933 +           %let  EMEXCEPTIONSTRING = exception.server.tsdm.invalidleadpointforkld;
+20934 +           %goto ENDLINE;
+20935 +       %end;
+20936 +       %else %do;
+20937 +            %let _clusLeadPoint =  &EM_PROPERTY_CLUSLEADPOINT;
+20938 +       %end;
+20939 +       %EM_TSESM_MakeOutKLD(indata=&EM_USER_OUTPRED,
+20940 +                            target=%EM_TARGET,
+20941 +                            timeid=%EM_TIMEID,
+20942 +                            futurepoint=&_clusLeadPoint,
+20943 +                            outKLD=&EM_USER_OUTKLD
+20944 +                            );
+20946 +       data &_EXPORT_DATA;
+20947 +           set &EM_USER_OUTKLD;
+20948 +       run;
+20949 +   %end;
+20950 +    %else %if &_EXPORTDATA eq FORECAST %then %do;
+20952 +              %EM_TSESM_MakeOutClusInput(indata=&EM_USER_OUTSUM,
+20953 +                                         esmmethod=&EM_PROPERTY_FCMETHOD,
+20954 +                                         criterion=&EM_PROPERTY_BESTCRIT,
+20955 +                                         outdata= &_EXPORT_DATA);
+20956 +    %end;
+20957 +    %else %if &_EXPORTDATA eq SIMILARITY %then %do;
+20959 +              %EM_TSESM_MakeOutSimInput(indata=&EM_USER_OUTSUM,
+20960 +                                        inoutfor=&EM_USER_OUTDATA,
+20961 +                                        target=%EM_TARGET,
+20962 +                                        timeid=%EM_TIMEID,
+20963 +                                        esmmethod=&EM_PROPERTY_FCMETHOD,
+20964 +                                        criterion=&EM_PROPERTY_BESTCRIT,
+20965 +                                        outdata= &_EXPORT_DATA
+20966 +                                       );
+20967 +    %end;
+20968 +    %else %do;
+20970 +             data &_EXPORT_DATA;
+20971 +                  set &EM_USER_OUTDATA;
+20972 +             run;
+20974 +        * number of outliers;
+20975 +        /* this block is added 09022011 */
+20976 +        proc sql noprint;
+20977 +            select count(*) into :_has_outlier from &EM_USER_OUTLIER where outlierindex eq 1;
+20978 +        quit;
+20980 +        %if &EM_PROPERTY_SMOOTHOUTLIER eq Y and &_has_outlier gt 0 %then %do;
+20981 +            /* this block is moved from below 09022011 */
+20982 +            %EM_TSESM_MakeSmoothedOutds(indata=&_EXPORT_DATA,
+20983 +                                        inoutlierds=&EM_USER_OUTLIER,
+20984 +                                        target=%EM_TARGET,
+20985 +                                        timeid=%EM_TIMEID,
+20986 +                                        replace=&EM_PROPERTY_OUTLIERREPLACE,
+20987 +                                        outdata=&_EXPORT_DATA
+20988 +                                        );
+20990 +            * in this type of output DO NOT keep outlier flags;
+20991 +            /* this block is added 09022011 */
+20992 +            %if &EM_PROPERTY_EXTINPUT eq Y %then %do;
+20993 +                data &_EXPORT_DATA;
+20994 +                    set &_EXPORT_DATA;
+20995 +                    drop outlier:;
+20996 +                run;
+20997 +            %end;
+20999 +        %end;
+21000 +    %end;
+21002 +   /*--------------- Modify and export columnsMeta ------------------------------------*/
+21005 +      data _null_;
+21006 +       length string $34;
+21007 +       filename X "&_FILE_CDELTA";
+21008 +       file X;
+21011 +      %if (&_EXPORTDATA eq KLD)
+21012 +       or (&_EXPORTDATA eq FORECAST)
+21013 +       or (&_EXPORTDATA eq SIMILARITY)
+21014 +      %then %do;
+21016 +         %let dsid=%sysfunc(open(&EM_USER_TSIDMAP));
+21017 +         %if &dsid > 0 %then %do;
+21018 +            %let nvar = %sysfunc(attrn(&dsid, NVAR));
+21019 +            %do i = 1 %to &nvar;  /* not 1= _NAMEID_   2=_TSID_ */
+21020 +                 %let varname = %sysfunc(varname(&dsid, &i));
+21022 +                      %if ~(( &varname eq _TSID_ ) or ( &varname eq _NAMEID_ ) ) %then  %do;
+21023 +                          put "if UPCASE(STRIP(NAME)) eq UPCASE(STRIP('&varname')) then ROLE='CROSSID';";
+21024 +                      %end;
+21025 +             %end;
+21027 +             %if (&_EXPORTDATA eq SIMILARITY)   %then %do;
+21028 +                  put "if upcase(strip(ROLE)) eq 'TARGET' then ROLE = 'INPUT'; ";
+21029 +             %end;
+21031 +             %let dsid = %sysfunc(close(&dsid));
+21032 +           %end;
+21033 +           put "if UPCASE(STRIP(NAME)) eq '_TSID_' then ROLE='ID';";
+21034 +           put "if UPCASE(STRIP(NAME)) eq '_VARNAME_' then ROLE='REJECTED';";
+21035 +           put "if UPCASE(STRIP(NAME)) eq '_ROLE_' then ROLE='REJECTED';";
+21036 +           put "if UPCASE(STRIP(NAME)) eq '_NAMEID_' then ROLE='ID';";
+21038 +    %end;
+21039 +    %else %do;
+21040 +           put "if UPCASE(STRIP(NAME)) eq '_TSID_' then ROLE='ID';";
+21041 +    %end;
+21044 +    run;
+21049 +    %ENDLINE:
+21050 +%mend EM_TSESM_SCORE;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+      
+
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: There were 7300 observations read from the data set EMWS1.TSESM_OUTFORCST.
+NOTE: The data set EMWS1.TSESM_FORCSTPLOTDS has 7300 observations and 11 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.03 seconds
+      
+
+
+NOTE: There were 7300 observations read from the data set EMWS1.TSESM_FORCSTPLOTDS.
+NOTE: The data set EMWS1.TSESM_FORCSTPLOTDS has 7300 observations and 11 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: The file WORK._TMPTIMEDS (memtype=DATA) was not found, but appears on a DELETE statement.
+
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: The file WORK._TMPTIMEDS2 (memtype=DATA) was not found, but appears on a DELETE statement.
+
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 4 observations read from the data set EMWS1.TSESM_OUTSUM.
+NOTE: The data set EMWS1.TSESM_OUTSUM has 4 observations and 16 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: There were 1825 observations read from the data set EMWS1.TSESM_OUTDATA.
+NOTE: The data set EMWS1.TSESM_TRAIN has 1825 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.04 seconds
+      
+
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+
+NOTE: Variable string is uninitialized.
+NOTE: The file X is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\TSESM\CDELTA_TRAIN.sas,
+      RECFM=V,LRECL=32767,File Size (bytes)=0,
+      Last Modified=22 December 2019 20:01:51 o'clock,
+      Create Time=11 December 2019 21:36:27 o'clock
+
+NOTE: 1 record was written to the file X.
+      The minimum record length was 50.
+      The maximum record length was 50.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+21053  
+21054  
+21055  *------------------------------------------------------------*;
+21056  * End SCORE: TSESM;
+21057  *------------------------------------------------------------*;
+
+21059  *------------------------------------------------------------*;
+21060  * TSESM: Computing metadata for TRAIN data;
+21061  *------------------------------------------------------------*;
+
