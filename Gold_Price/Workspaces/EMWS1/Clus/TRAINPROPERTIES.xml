@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?><_ROOT_  Bins="100" Clusvar="_SEGMENT_" ClusvarLabel="Segment Variable" ClusvarRole="SEGMENT"
+ MaxC="4" NominalEncoding="GLM" OrdinalEncoding="RANK" MissingInterval="DEFAULT" MissingNominal="DEFAULT"
+ MissingOrdinal="DEFAULT" ImputationMethod="NONE" HideVariable="Y" TrainDefaults="Y"
+ Learn="." LearnInitial="0.5" LearnFinal="0.02" LearnSteps="1000" MaxIter="10" MaxSteps="1200"
+ XConv="0.0001" Initial="DEFAULT" Drift="N" Radius="0" Stdize="STD" Summary="N" TreeProfile="Y"
+ ClusterGraphs="Y" NumberClusterMethod="USER" DistancePlot="Y" FinalMaxNum="20" AutomaticMaxNum="50"
+ AutomaticMinNum="2" AutomaticMethod="WARD" CCCCutOff="3" ForceRun="N" RunAction="Train"
+ Component="Cluster" RawCreateTime="1890767200.4" CreateTime="30NOV2019:21:06:40"
+ RunId="045a88c4-c56f-4c53-8a62-c4359c9d2aed" RawLastTimeRun="1892663230.5" RawRunTime="25.125999928"
+ LastTimeRun="22DEC2019:19:47:10" RunTime="0 Hr. 0 Min. 25.13 Sec.">
+<VARIABLEPROPERTIES/>
+<FILEPROPERTIES/>
+</_ROOT_>

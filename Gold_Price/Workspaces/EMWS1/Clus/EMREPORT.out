@@ -1,0 +1,15 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Variable Importance
+
+                                  Number of    Number of
+                                  Splitting    Surrogate
+Variable Name            Label      Rules        Rules      Importance
+
+day                                   2            1          1.00000 
+closing_at_daily_low                  2            1          0.81625 
+closing_at_daily_high                 1            1          0.72787 
+all_day_maintain                      1            0          0.71937 
+open_equals_closing                   0            1          0.71897 

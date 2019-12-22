@@ -1,0 +1,96 @@
+*------------------------------------------------------------*
+ Node = 2
+*------------------------------------------------------------*
+if all_day_maintain IS ONE OF: 1
+then 
+ Tree Node Identifier   = 2
+ Number of Observations = 518
+ Predicted: _SEGMENT_=2  = 1.00
+ Predicted: _SEGMENT_=3  = 0.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 0.00
+ 
+*------------------------------------------------------------*
+ Node = 8
+*------------------------------------------------------------*
+if day IS ONE OF: THURSDAY
+AND closing_at_daily_low IS ONE OF: 0 or MISSING
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 8
+ Number of Observations = 226
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 0.00
+ Predicted: _SEGMENT_=4  = 1.00
+ Predicted: _SEGMENT_=1  = 0.00
+ 
+*------------------------------------------------------------*
+ Node = 9
+*------------------------------------------------------------*
+if day IS ONE OF: THURSDAY
+AND closing_at_daily_low IS ONE OF: 1
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 9
+ Number of Observations = 29
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 0.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 1.00
+ 
+*------------------------------------------------------------*
+ Node = 10
+*------------------------------------------------------------*
+if day IS ONE OF: TUESDAY
+AND closing_at_daily_high IS ONE OF: 0 or MISSING
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 10
+ Number of Observations = 224
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 0.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 1.00
+ 
+*------------------------------------------------------------*
+ Node = 11
+*------------------------------------------------------------*
+if day IS ONE OF: TUESDAY
+AND closing_at_daily_high IS ONE OF: 1
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 11
+ Number of Observations = 29
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 1.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 0.00
+ 
+*------------------------------------------------------------*
+ Node = 12
+*------------------------------------------------------------*
+if day IS ONE OF: WEDNESDAY, FRIDAY, SUNDAY, MONDAY or MISSING
+AND closing_at_daily_low IS ONE OF: 0 or MISSING
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 12
+ Number of Observations = 720
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 1.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 0.00
+ 
+*------------------------------------------------------------*
+ Node = 13
+*------------------------------------------------------------*
+if day IS ONE OF: WEDNESDAY, FRIDAY, SUNDAY, MONDAY or MISSING
+AND closing_at_daily_low IS ONE OF: 1
+AND all_day_maintain IS ONE OF: 0 or MISSING
+then 
+ Tree Node Identifier   = 13
+ Number of Observations = 77
+ Predicted: _SEGMENT_=2  = 0.00
+ Predicted: _SEGMENT_=3  = 0.00
+ Predicted: _SEGMENT_=4  = 0.00
+ Predicted: _SEGMENT_=1  = 1.00
+ 

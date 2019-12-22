@@ -1,0 +1,95 @@
+*------------------------------------------------------------*
+* Score Log
+Date:                22 December 2019
+Time:                19:47:18 o'clock
+*------------------------------------------------------------*
+11066  proc transpose data=EMWS1.Clus_OUTVAR out=WORK.Clus_OUTVAR(rename=(COl2=NAME) where=(COL1='IMPUTED'));
+11067  var all_day_maintain0--open_equals_closing1;
+11068  where _TYPE_ in('TYPE' 'VARIABLE');
+11069  run;
+
+NOTE: There were 2 observations read from the data set EMWS1.CLUS_OUTVAR.
+      WHERE _TYPE_ in ('TYPE', 'VARIABLE');
+NOTE: The data set WORK.CLUS_OUTVAR has 0 observations and 4 variables.
+NOTE: PROCEDURE TRANSPOSE used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.03 seconds
+      
+
+11070  proc sort data=WORK.Clus_OUTVAR;
+11071  by NAME;
+11072  run;
+
+NOTE: Input data set is empty.
+NOTE: The data set WORK.CLUS_OUTVAR has 0 observations and 4 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+      
+
+11073  proc sort data=EMWS1.Clus_VariableSet(KEEP=NAME ROLE LEVEL) out=WORK.Clus_SORTEDVARS;
+11074  by NAME;
+11075  run;
+
+NOTE: There were 12 observations read from the data set EMWS1.CLUS_VARIABLESET.
+NOTE: The data set WORK.CLUS_SORTEDVARS has 12 observations and 3 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+      
+
+11076  data WORK.Clus_OUTVAR;
+11077  merge WORK.Clus_OUTVAR(in=INVAR) WORK.Clus_SORTEDVARS;
+11078  by NAME;
+11079  if INVAR then output;
+11080  run;
+
+WARNING: Multiple lengths were specified for the BY variable NAME by input data sets. This might cause unexpected results.
+NOTE: There were 0 observations read from the data set WORK.CLUS_OUTVAR.
+NOTE: There were 12 observations read from the data set WORK.CLUS_SORTEDVARS.
+NOTE: The data set WORK.CLUS_OUTVAR has 0 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+      
+
+NOTE: This SAS session is using a registry in WORK.  All changes will be lost at the end of this session.
+11081  filename emflow "C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Clus\EMFLOWSCORE.sas";
+11082  *------------------------------------------------------------*;
+11083  * Clus: Scoring DATA data;
+11084  *------------------------------------------------------------*;
+11085  data EMWS1.Clus_TRAIN
+11086  / view=EMWS1.Clus_TRAIN
+11087  ;
+11088  set EMWS1.FIMPORT3_train
+11089  ;
+11090  %inc emflow;
+11809  run;
+
+NOTE: DATA STEP view saved on file EMWS1.CLUS_TRAIN.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.FIMPORT3_TRAIN.VIEW used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.04 seconds
+      
+NOTE: DATA statement used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.07 seconds
+      
+
+11810  quit;
+11811  filename emflow;
+NOTE: Fileref EMFLOW has been deassigned.
+
+11812  *------------------------------------------------------------*;
+11813  * Clus: Computing metadata for TRAIN data;
+11814  *------------------------------------------------------------*;
+
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.07 seconds
+      
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.06 seconds
+      
