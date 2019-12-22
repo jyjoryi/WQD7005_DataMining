@@ -27,4 +27,4 @@ Directory Guide:
 - gold_tweepy : crawling data from twitter (keyword: gold price)
 - newscrawler : Python code to crawl news headline on gold price and code for preprocessing
 - pricecrawler : Python code to crawl gold price data and code for preprocessing
-- Gold_Price : SAS files
+- Gold_Price.zip : SAS files
