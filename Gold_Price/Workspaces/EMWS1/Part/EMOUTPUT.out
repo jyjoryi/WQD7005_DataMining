@@ -1,0 +1,79 @@
+*------------------------------------------------------------*
+User:                tan.joryi
+Date:                22 December 2019
+Time:                19:46:22 o'clock
+*------------------------------------------------------------*
+* Training Output
+*------------------------------------------------------------*
+ 
+ 
+ 
+ 
+Variable Summary
+ 
+            Measurement    Frequency
+Role           Level         Count
+ 
+INPUT        BINARY            4
+INPUT        NOMINAL           2
+REJECTED     INTERVAL          4
+REJECTED     NOMINAL           1
+REJECTED     ORDINAL           1
+TARGET       NOMINAL           1
+TIMEID       INTERVAL          1
+ 
+ 
+ 
+ 
+Partition Summary
+ 
+                                      Number of
+Type              Data Set          Observations
+ 
+DATA        EMWS1.FIMPORT3_train        1823
+TRAIN       EMWS1.Part_TRAIN             909
+VALIDATE    EMWS1.Part_VALIDATE          914
+
+
+*------------------------------------------------------------*
+* Score Output
+*------------------------------------------------------------*
+
+
+*------------------------------------------------------------*
+* Report Output
+*------------------------------------------------------------*
+ 
+ 
+ 
+ 
+Summary Statistics for Class Targets
+ 
+Data=DATA
+ 
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+ 
+ trend         .       downward        712       39.0565
+ trend         .       maintain        396       21.7224
+ trend         .       upward          715       39.2211
+ 
+ 
+Data=TRAIN
+ 
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+ 
+ trend         .       downward        355       39.0539
+ trend         .       maintain        197       21.6722
+ trend         .       upward          357       39.2739
+ 
+ 
+Data=VALIDATE
+ 
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+ 
+ trend         .       downward        357       39.0591
+ trend         .       maintain        199       21.7724
+ trend         .       upward          358       39.1685

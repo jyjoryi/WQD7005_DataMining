@@ -1,0 +1,87 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Variable Summary
+
+            Measurement    Frequency
+Role           Level         Count
+
+INPUT        BINARY            4    
+INPUT        NOMINAL           2    
+REJECTED     INTERVAL          5    
+REJECTED     NOMINAL           2    
+REJECTED     ORDINAL           1    
+SEGMENT      NOMINAL           1    
+TARGET       NOMINAL           1    
+TIMEID       INTERVAL          1    
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Frequencies: _SEGMENT_
+
+                                     Percent of
+ Segment     Segment    Frequency       Total
+Variable      Value       Count       Frequency
+
+_SEGMENT_       3            749       41.0861 
+_SEGMENT_       2            518       28.4147 
+_SEGMENT_       1            330       18.1020 
+_SEGMENT_       4            226       12.3971 
+ 
+                                                                                                                                                                                                                                                                
+ 
+Variable: _SEGMENT_ Segment: 3 Count: 749
+Decision Tree Importance Profiles
+
+Variable                  Worth     Rank
+
+day                      0.35050      1 
+closing_at_daily_low     0.18798      2 
+all_day_maintain         0.13401      3 
+open_equals_closing      0.13348      4 
+closing_at_daily_high    0.06530      5 
+month                    0.00208      6 
+ 
+                                                                                                                                                                                                                                                                
+ 
+Variable: _SEGMENT_ Segment: 2 Count: 518
+Decision Tree Importance Profiles
+
+Variable                  Worth     Rank
+
+all_day_maintain         0.40681      1 
+open_equals_closing      0.40463      2 
+day                      0.34180      3 
+closing_at_daily_high    0.29002      4 
+closing_at_daily_low     0.29002      5 
+month                    0.00186      6 
+ 
+                                                                                                                                                                                                                                                                
+ 
+Variable: _SEGMENT_ Segment: 1 Count: 330
+Decision Tree Importance Profiles
+
+Variable                  Worth     Rank
+
+day                      0.15565      1 
+closing_at_daily_high    0.03649      2 
+open_equals_closing      0.02615      3 
+all_day_maintain         0.02601      4 
+closing_at_daily_low     0.00067      5 
+month                    0.00057      6 
+ 
+                                                                                                                                                                                                                                                                
+ 
+Variable: _SEGMENT_ Segment: 4 Count: 226
+Decision Tree Importance Profiles
+
+Variable                  Worth     Rank
+
+day                      0.18396      1 
+closing_at_daily_low     0.01711      2 
+all_day_maintain         0.01220      3 
+open_equals_closing      0.01189      4 
+closing_at_daily_high    0.00846      5 
+month                    0.00009      6 

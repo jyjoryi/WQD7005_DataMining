@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?><_ROOT_  Location="CATALOG" Catalog="SASHELP.EMEXPL.PROFILE.SOURCE" DataNeeded="Y" MinWorth="0.01"
+ MaxNumInput="10" MaxNumReport="10" NumHistBars="8" ProfileAll="N" PrintWorth="Y"
+ UseReportVars="Y" TargetRole="NONE" OtherPercentCutOff="95" MaxDepth="1" ForceRun="N"
+ RunAction="Train" Component="Profile" RawCreateTime="1890767737" CreateTime="30NOV2019:21:15:37"
+ RunId="d0f9b448-4cd3-4f4b-b0f0-2939a8b03394" RawLastTimeRun="1892663256.2" RawRunTime="23.08100009"
+ LastTimeRun="22DEC2019:19:47:36" RunTime="0 Hr. 0 Min. 23.08 Sec.">
+<VARIABLEPROPERTIES/>
+<FILEPROPERTIES ><![CDATA[
+USERTRAINCODE
+USERSCORECODE
+USERREPORTCODE
+]]>
+</FILEPROPERTIES></_ROOT_>

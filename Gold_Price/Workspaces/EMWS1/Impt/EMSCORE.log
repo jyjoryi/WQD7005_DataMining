@@ -1,0 +1,94 @@
+*------------------------------------------------------------*
+* Score Log
+Date:                28 October 2019
+Time:                01:14:49 o'clock
+*------------------------------------------------------------*
+NOTE: This SAS session is using a registry in WORK.  All changes will be lost at the end of this session.
+11143  data _null_;
+11144  set EMWS1.Impt_META end=eof;
+11145  length string $34;
+11146  retain missTotal;
+11147  file #LN00193;
+11148  if _n_=1 then misstotal = percentmiss;
+11149  missTotal = percentmiss+misstotal;
+11150  if IMP ne '' and METHOD ne 'NONE' then do;
+11151  string = '"'!!strip(NAME)!!'"';
+11152  put 'if NAME = ' string 'then delete;';
+11153  put 'else ';
+11154  string = '"'!!strip(IMP)!!'"';
+11155  put 'if NAME    = ' string ' then do;';
+11156  string = '"'!!strip(ROLE)!!'"';
+11157  put '   ROLE    = ' string ';';
+11158  string = '"'!!strip(FAMILY)!!'"';
+11159  put '   FAMILY  = ' string ';';
+11160  string = '"'!!strip(REPORT)!!'"';
+11161  put '   REPORT  = ' string ';';
+11162  string = '"'!!strip(LEVEL)!!'"';
+11163  put '   LEVEL   = ' string ';';
+11164  string = '"'!!strip(ORDER)!!'"';
+11165  put '   ORDER   = ' string ';';
+11166  put 'end;';
+11167  end;
+11168  if percentmiss>50 and ROLE ne 'TARGET' then do;
+11169  string = '"'!!strip(NAME)!!'"';
+11170  put 'if NAME = ' string ' then do;';
+11171  put '   ROLE ="REJECTED";';
+11172  put '   COMMENT = "Percent of missing exceeds 50%";';
+11173  put 'end;';
+11174  end;
+11175  run;
+
+NOTE: The file #LN00193 is:
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Impt\CDELTA_TRAIN.sas,
+      RECFM=V,LRECL=32767,File Size (bytes)=0,
+      Last Modified=28 October 2019 01:14:49 o'clock,
+      Create Time=28 October 2019 01:07:54 o'clock
+
+NOTE: 72 records were written to the file #LN00193.
+      The minimum record length was 4.
+      The maximum record length was 50.
+NOTE: There were 13 observations read from the data set EMWS1.IMPT_META.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+      
+
+11176  filename emflow "C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\Impt\EMFLOWSCORE.sas";
+11177  *------------------------------------------------------------*;
+11178  * Impt: Scoring DATA data;
+11179  *------------------------------------------------------------*;
+11180  data EMWS1.Impt_TRAIN
+11181  / view=EMWS1.Impt_TRAIN
+11182  ;
+11183  set EMWS1.GrfExpl_TRAIN
+11184  ;
+11185  %inc emflow;
+11208  run;
+
+NOTE: DATA STEP view saved on file EMWS1.IMPT_TRAIN.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.GRFEXPL_TRAIN.VIEW used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.07 seconds
+      
+NOTE: DATA statement used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.10 seconds
+      
+
+11209  quit;
+11210  filename emflow;
+NOTE: Fileref EMFLOW has been deassigned.
+
+11211  *------------------------------------------------------------*;
+11212  * Impt: Computing metadata for TRAIN data;
+11213  *------------------------------------------------------------*;
+
+NOTE: View EMWS1.IMPT_TRAIN.VIEW used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.14 seconds
+      
+NOTE: View EMWS1.IMPT_TRAIN.VIEW used (Total process time):
+      real time           0.18 seconds
+      cpu time            0.18 seconds
+      

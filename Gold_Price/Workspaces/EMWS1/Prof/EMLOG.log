@@ -1,0 +1,3159 @@
+*------------------------------------------------------------*
+User:                tan.joryi
+Date:                22 December 2019
+Time:                19:47:58 o'clock
+Site:                12600285
+Platform:            X64_8PRO
+Maintenance Release: 9.04.01M3P062415
+EM Version:          14.1
+* 
+*------------------------------------------------------------*
+* Training Log
+Date:                22 December 2019
+Time:                19:47:40 o'clock
+*------------------------------------------------------------*
+14715  proc freq data=EMWS1.Prof_VariableSet noprint;
+14716  table ROLE*LEVEL/out=WORK.ProfMETA;
+14717  run;
+ 
+NOTE: There were 17 observations read from the data set EMWS1.PROF_VARIABLESET.
+NOTE: The data set WORK.PROFMETA has 8 observations and 4 variables.
+NOTE: PROCEDURE FREQ used (Total process time):
+      real time           0.16 seconds
+      cpu time            0.03 seconds
+ 
+ 
+14718  proc print data=WORK.ProfMETA label noobs;
+14719  var ROLE LEVEL COUNT;
+14720  label ROLE = "%sysfunc(sasmsg(sashelp.dmine, meta_role_vlabel, NOQUOTE))" LEVEL = "%sysfunc(sasmsg(sashelp.dmine, meta_level_vlabel, NOQUOTE))" COUNT = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel, NOQUOTE))";
+14721  title9 ' ';
+14722  title10 "%sysfunc(sasmsg(sashelp.dmine, rpt_varSummary_title  , NOQUOTE))";
+14723  run;
+ 
+NOTE: There were 8 observations read from the data set WORK.PROFMETA.
+NOTE: The PROCEDURE PRINT printed page 1.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.01 seconds
+ 
+ 
+14724  title10;
+ 
+14725  %let EMEXCEPTIONSTRING=;
+15057  *------------------------------------------------------------*;
+15058  * Prof: Generation of macros and macro variables;
+15059  * To see the code generated, set the EM_DEBUG macro variable to SOURCE or _ALL_;
+15060  *------------------------------------------------------------*;
+ 
+15061  %let EMEXCEPTIONSTRING=;
+15062  *------------------------------------------------------------*;
+15063  * TRAIN: Prof;
+15064  *------------------------------------------------------------*;
+15065  %let EM_ACTION = TRAIN;
+15066  %let syscc = 0;
+15067  %macro main;
+15068     %if %sysfunc(indexw(&EM_DEBUG, _ALL_)) or %sysfunc(indexw(&EM_DEBUG, SOURCE)) %then %do;
+15069         options MPRINT;
+15070     %end;
+15071
+15072     filename temp catalog 'sashelp.emexpl.profile_macros.source';
+15073     %include temp;
+15074     filename temp;
+15075
+15076     /* Initialize property macro variables */
+15077     %SetProperties;
+15078
+15079     %if %upcase(&EM_ACTION) = CREATE %then %do;
+15080
+15081         filename temp catalog 'sashelp.emexpl.profile_create.source';
+15082         %include temp;
+15083         filename temp;
+15084         %create;
+15085     %end;
+15086     %else
+15087     %if %upcase(&EM_ACTION) = TRAIN %then %do;
+15088
+15089         filename temp catalog 'sashelp.emexpl.profile_train.source';
+15090         %include temp;
+15091         filename temp;
+15092         %train;
+15093     %end;
+15094  %mend main;
+15095
+15096  %main;
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMEXPL.PROFILE_MACROS.SOURCE.
+15097 +%macro SetProperties;
+15098 +   %em_checkmacro(name=EM_PROPERTY_PROFILEALL,         global=Y, value=N);
+15099 +   %em_checkmacro(name=EM_PROPERTY_USEREPORTVARS,      global=Y, value=Y);
+15100 +   %em_checkmacro(name=EM_PROPERTY_OTHERPERCENTCUTOFF, global=Y, value=95);
+15101 +   %em_checkmacro(name=EM_PROPERTY_TARGETROLE,         global=Y, value=NONE);
+15102 +   %em_checkmacro(name=EM_PROPERTY_NUMHISTBARS,        global=Y, value=8);
+15103 +   %em_checkmacro(name=EM_PROPERTY_MINWORTH,           global=Y, value=0.01);
+15104 +   %em_checkmacro(name=EM_PROPERTY_MAXDEPTH,           global=Y, value=1);
+15105 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMREPORT,       global=Y, value=10);
+15106 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMINPUT,        global=Y, value=10);
+15107 +   %em_checkmacro(name=EM_PROPERTY_PRINTWORTH,         global=Y, value=Y);
+15108 +%mend SetProperties;
+15109 +
+15110 +
+15111 +%macro makeVarMacros(level= );
+15112 +
+15113 +    %let numvars = 0;
+15114 +    %let where   = '';
+15115 +
+15116 +    %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15117 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL="&level"  and USE in('Y', 'D'));
+15118 +    %else
+15119 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE ='INPUT' and LEVEL="&level" and USE in('Y', 'D'));
+15120 +
+15121 +    %if &level = INTERVAL %then %do;
+15122 +        %let numvars = %eval( &EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED);
+15123 +        %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15124 +             %let numvars = %eval(&numvars + &EM_NUM_INTERVAL_TARGET);
+15125 +    %end;
+15126 +    %else %do;
+15127 +        %if &level = NOMINAL %then %do;
+15128 +            %let numvars = %eval(&EM_NUM_BINARY_INPUT + &EM_NUM_NOMINAL_INPUT +  &EM_NUM_BINARY_REJECTED + &EM_NUM_NOMINAL_REJECTED);
+15129 +             %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+15130 +                 %let numvars = %eval(&numvars + &EM_NUM_BINARY_TARGET + &EM_NUM_NOMINAL_TARGET);
+15131 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL in('NOMINAL', 'BINARY') and USE in('Y', 'D'));
+15132 +             %end;
+15133 +             %else
+15134 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE ='INPUT' and LEVEL in("NOMINAL", "BINARY") and USE in('Y', 'D'));
+15135 +
+15136 +        %end;
+15137 +        %else %do;
+15138 +            %let numvars = %eval(&EM_NUM_ORDINAL_INPUT + &EM_NUM_ORDINAL_REJECTED);
+15139 +            %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15140 +                %let numvars = %eval(&numvars + &EM_NUM_ORDINAL_TARGET);
+15141 +        %end;
+15142 +    %end;
+15143 +
+15144 +    %if &numvars>0 %then %do;
+15145 +         %let numloop = %sysfunc(ceil(&numvars/10000));
+15146 +         %let loopcount = 0;
+15147 +
+15148 +         %do %while((&numloop - &loopcount) > 0);
+15149 +             %let first = %eval((&loopcount*10000) + 1);
+15150 +             %let last  = %eval(&first + 10000);
+15151 +             %let loopcount = %eval(&loopcount +1);
+15152 +             %let centry = &EM_LIB..&EM_NODEID._MACS.&LEVEL._&loopcount..SOURCE;
+15153 +             filename X catalog "&centry";
+15154 +             data _null_;
+15155 +                length _STRING_ $80;
+15156 +                retain _STRING_ ;
+15157 +                file X;
+15158 +                set &EM_DATA_VARIABLESET(firstobs=&first obs=&last) end=eof;
+15159 +
+15160 +                where &where;
+15161 +
+15162 +                if _N_=1 then
+15163 +                   put '%macro _PROFVAR;';
+15164 +
+15165 +                if (length(_STRING_) + length(trim(NAME))+ 1  < 80) then do;
+15166 +                   _STRING_ = trim(_STRING_)!!' '!!trim(NAME);
+15167 +                   if eof then do;
+15168 +                      put _STRING_;
+15169 +                      put '%mend _PROFVAR;';
+15170 +                   end;
+15171 +                end;
+15172 +                else do;
+15173 +                   put _STRING_;
+15174 +                  _string_ = TRIM(NAME);
+15175 +                   if eof then do;
+15176 +                      put _string_;
+15177 +                      put '%mend _PROFVAR;';
+15178 +                   end;
+15179 +                end;
+15180 +             run;
+15181 +             filename X;
+15182 +         %end;
+15183 +    %end;
+15184 +
+15185 +%mend makeVarMacros;
+15186 +
+15187 +
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMEXPL.PROFILE_TRAIN.SOURCE.
+15188 +%macro _looparbor(level=, target=, rules=);
+15189 +    %local where;
+15190 +
+15191 +    %if (&level eq or &target eq ) %then %goto doenda;
+15192 +    %if &rules eq %then &rules = _TEMPRULE;
+15193 +
+15194 +    %let lnumvars = 0;
+15195 +    %let where   = '';
+15196 +
+15197 +    %if &level = INTERVAL %then %do;
+15198 +        %let lnumvars = %eval(&EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED);
+15199 +        %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15200 +             %let lnumvars = %eval(&lnumvars + &EM_NUM_INTERVAL_TARGET);
+15201 +    %end;
+15202 +    %else %do;
+15203 +        %if &level = NOMINAL %then %do;
+15204 +            %let lnumvars = %eval(&EM_NUM_BINARY_INPUT + &EM_NUM_NOMINAL_INPUT + &EM_NUM_BINARY_REJECTED + &EM_NUM_NOMINAL_REJECTED);
+15205 +             %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15206 +                 %let lnumvars = %eval(&lnumvars + &EM_NUM_BINARY_TARGET + &EM_NUM_NOMINAL_TARGET);
+15207 +        %end;
+15208 +        %else %do;
+15209 +            %let lnumvars = %eval(&EM_NUM_ORDINAL_INPUT + &EM_NUM_ORDINAL_REJECTED);
+15210 +            %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15211 +                %let lnumvars = %eval(&lnumvars + &EM_NUM_ORDINAL_TARGET);
+15212 +        %end;
+15213 +    %end;
+15214 +
+15215 +    %if &lnumvars>0 %then %do;
+15216 +         %let numloop = %sysfunc(ceil(&lnumvars/10000));
+15217 +         %let loopcount = 0;
+15218 +
+15219 +         %do %while((&numloop - &loopcount) > 0);
+15220 +             %let loopcount = %eval(&loopcount +1);
+15221 +             %let centry = &EM_LIB..&EM_NODEID._MACS.&LEVEL._&loopcount..SOURCE;
+15222 +             filename X catalog "&centry";
+15223 +             %inc X;
+15224 +
+15225 +             proc arbor data=&EM_NODEID._TMP
+15226 +
+15227 +             %if &EM_PROPERTY_MAXDEPTH = 1 %then %do;
+15228 +                 Criterion=GINI Leafsize=5 Mincatsize = 5
+15229 +                 Maxbranch=5 Maxdepth=1
+15230 +                 NORULELIMIT MAXRULES=&EM_PROPERTY_MAXNUMINPUT
+15231 +             %end;
+15232 +             %else %do;
+15233 +                 Criterion=PROBCHISQ alpha=0.2 Leafsize=5 Mincatsize = 5
+15234 +                 Maxbranch=5 Maxdepth=&EM_PROPERTY_MAXDEPTH
+15235 +                 MAXRULES=5 Padjust= CHAIDBEFORE DEPTH
+15236 +             %end;
+15237 +
+15238 +              MAXSURRS=0 Missing=USEINSEARCH Exhaustive=5000;
+15239 +
+15240 +                input %_PROFVAR
+15241 +
+15242 +                    / level = &level;
+15243 +                target _SEG / level=binary;
+15244 +
+15245 +                Performance Disk NodeSize=10000;
+15246 +                Assess NoValidata measure=MISC;
+15247 +                SUBTREE BEST;
+15248 +
+15249 +                %if &EM_PROPERTY_MAXDEPTH > 1 %then %do;
+15250 +                    save IMPORTANCE=_LOOPTEMPRULE;
+15251 +                %end;
+15252 +                %else %do;
+15253 +                    save RULES=_LOOPTEMPRULE;
+15254 +                %end;
+15255 +             run;
+15256 +             quit;
+15257 +
+15258 +             %if %sysfunc(exist(_LOOPTEMPRULE)) %then %do;
+15259 +                 proc append base=&RULES data=_LOOPTEMPRULE force;
+15260 +                 run;
+15261 +                 proc datasets lib=work nolist mt=(DATA VIEW);
+15262 +                    delete _LOOPTEMPRULE;
+15263 +                 run;
+15264 +                 quit;
+15265 +             %end;
+15266 +
+15267 +
+15268 +             filename X;
+15269 +         %end;
+15270 +     %end;
+15271 +
+15272 +   %doenda:
+15273 +
+15274 +%mend _looparbor;
+15275 +
+15276 +%macro _arbor(target=, rules=, fit=);
+15277 +   %local _numnomvars _numordvars _numintvars;
+15278 +
+15279 +   %if &target eq  %then %goto doendc;
+15280 +   %if &rules eq %then &rules = _TEMPRULE;
+15281 +   %if &fit   eq %then &fit   = _FIT;
+15282 +
+15283 +   %let _numintvars = %eval(&EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED);
+15284 +   %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15285 +       %let _numintvars = %eval(&_numintvars + &EM_NUM_INTERVAL_TARGET);
+15286 +
+15287 +
+15288 +   %let _numnomvars =  %eval(&EM_NUM_BINARY_INPUT + &EM_NUM_NOMINAL_INPUT + &EM_NUM_BINARY_REJECTED + &EM_NUM_NOMINAL_REJECTED);
+15289 +   %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15290 +       %let _numnomvars = %eval(&_numnomvars + &EM_NUM_BINARY_TARGET + &EM_NUM_NOMINAL_TARGET);
+15291 +
+15292 +   %let _numordvars = %eval(&EM_NUM_ORDINAL_INPUT + &EM_NUM_ORDINAL_REJECTED);
+15293 +   %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15294 +       %let _numordvars = %eval(&_numordvars + &EM_NUM_ORDINAL_TARGET);
+15295 +
+15296 +   proc arbor data=&EM_NODEID._TMP
+15297 +
+15298 +   %if &EM_PROPERTY_MAXDEPTH = 1 %then %do;
+15299 +      Criterion=GINI Leafsize=5 Mincatsize = 5
+15300 +      Maxbranch=5 Maxdepth=1
+15301 +      NORULELIMIT MAXRULES=&EM_PROPERTY_MAXNUMINPUT
+15302 +   %end;
+15303 +   %else %do;
+15304 +      Criterion=PROBCHISQ alpha=0.2 Leafsize=5 Mincatsize = 5
+15305 +      Maxbranch=2 Maxdepth=&EM_PROPERTY_MAXDEPTH
+15306 +      MAXRULES=5 Padjust= CHAIDBEFORE DEPTH
+15307 +   %end;
+15308 +
+15309 +      MAXSURRS=0 Missing=USEINSEARCH Exhaustive=5000;
+15310 +
+15311 +      %if &_numintvars %then %do;
+15312 +          input %EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED
+15313 +
+15314 +          %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+15315 +              %EM_INTERVAL_TARGET
+15316 +          %end;
+15317 +
+15318 +              / level = interval;
+15319 +      %end;
+15320 +
+15321 +
+15322 +      %if &_numnomvars %then %do;
+15323 +          input %EM_BINARY_INPUT %EM_NOMINAL_INPUT %EM_BINARY_REJECTED %EM_NOMINAL_REJECTED
+15324 +
+15325 +          %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+15326 +              %EM_BINARY_TARGET %EM_NOMINAL_TARGET
+15327 +          %end;
+15328 +
+15329 +              / level = nominal;
+15330 +      %end;
+15331 +
+15332 +      %if &_numordvars %then %do;
+15333 +         input %EM_ORDINAL_INPUT %EM_ORDINAL_REJECTED
+15334 +
+15335 +         %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+15336 +              %EM_ORDINAL_TARGET
+15337 +         %end;
+15338 +
+15339 +             / level = ordinal;
+15340 +      %end;
+15341 +
+15342 +      target _SEG / level=binary;
+15343 +
+15344 +      Performance Disk NodeSize=10000;
+15345 +      Assess
+15346 +
+15347 +       %if %sysfunc(exist(&EM_NODEID._VALIDTMP, VIEW))>0 %then %do;
+15348 +          Validata=&EM_NODEID._VALIDTMP
+15349 +      %end;
+15350 +      %else %do;
+15351 +          NoValidata
+15352 +      %end;
+15353 +
+15354 +      measure=MISC;
+15355 +      SUBTREE BEST;
+15356 +
+15357 +      %if &EM_PROPERTY_MAXDEPTH > 1 %then %do;
+15358 +          SCORE data=&EM_NODEID._TMP  out=_NULL_ outfit=_FIT
+15359 +                role=TRAIN;
+15360 +          %if %sysfunc(exist(&EM_NODEID._VALIDTMP, VIEW))>0 %then %do;
+15361 +          SCORE data=&EM_NODEID._VALIDTMP  out=_NULL_ outfit=_FIT2
+15362 +                role=VALID;
+15363 +          %end;
+15364 +
+15365 +          save IMPORTANCE=_RULE;
+15366 +      %end;
+15367 +      %else %do;
+15368 +          save RULES=_RULE;
+15369 +      %end;
+15370 +
+15371 +      ;
+15372 +   run;
+15373 +   quit;
+15374 +
+15375 +   %if %sysfunc(exist(_RULE)) %then %do;
+15376 +       proc append base=&RULES data=_RULE force;
+15377 +       run;
+15378 +       proc datasets lib=work nolist mt=(DATA VIEW);
+15379 +          delete _RULE;
+15380 +       run;
+15381 +       quit;
+15382 +   %end;
+15383 +
+15384 +   %doendc:
+15385 +
+15386 +%mend _arbor;
+15387 +
+15388 +%macro tree_profile(SEGMENT=, _sizeDs=, _varsDs=, _fitDs=, _reportDs=);
+15389 +   %put &EM_CODEBAR;
+15390 +   %put * Filtering input variables ;
+15391 +   %put * SEGMENT= &segment;
+15392 +   %put &EM_CODEBAR;
+15393 +
+15394 +  %if _sizeDs eq %then %let _sizeDs = WORK._SEGMENTSIZE;
+15395 +  %if _varsDs eq %then %let _varsDs = WORK._SELECTEDVARS;
+15396 +  %if _fitDs  eq %then %let _fitDs  = WORK._FITSTAT;
+15397 +
+15398 +  %let _SEGMENT = &SEGMENT;
+15399 +
+15400 +  proc freq data=&EM_IMPORT_DATA noprint ;
+15401 +    table &_segment / missing out=&_segment(keep=&_segment count percent) ;
+15402 +
+15403 +    %if %EM_FREQ ne %then %do;
+15404 +        weight %EM_FREQ;
+15405 +        where %EM_FREQ>=0;
+15406 +    %end;
+15407 +
+15408 +  run ;
+15409 +  proc sort data=&_segment;
+15410 +     by descending count ;
+15411 +  run ;
+15412 +
+15413 +  %let dsid       = %sysfunc(open(&_segment));
+15414 +  %let segnum     = %sysfunc(varnum(&dsid, &_segment));
+15415 +  %let _segtype   = %sysfunc(vartype(&dsid, &segnum));
+15416 +  %let _segformat = %sysfunc(varfmt(&dsid, &segnum));
+15417 +
+15418 +  %let dsid=%sysfunc(close(&dsid));
+15419 +
+15420 +  %let SEGMENTS=;
+15421 +  %let COUNTS=;
+15422 +  %let OTHERWHERE=;
+15423 +  %let numLevels=;
+15424 +  data _segs;
+15425 +     length SegmentVariable $32 SegmentValue $200;
+15426 +     retain SegmentVariable "&_Segment";
+15427 +     label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+15428 +           SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))";
+15429 +     drop &_segment cum othercount otherpct numLevels;
+15430 +     retain cum othercount otherpct numLevels 0;
+15431 +     format Count 8.;
+15432 +     set &_segment end=eof;
+15433 +
+15434 +     %if &_segformat ne %then %do;
+15435 +         SegmentValue= left(put(&_segment, &_segformat));
+15436 +     %end;
+15437 +     %else %do;
+15438 +        %if &_segtype = N %then %do;
+15439 +            SegmentValue= left(put(&_segment, best12.));
+15440 +        %end;
+15441 +        %else %do;
+15442 +            SegmentValue = &_segment;
+15443 +        %end;
+15444 +     %end;
+15445 +
+15446 +     %if &EM_PROPERTY_PROFILEALL eq Y %then %do;
+15447 +        call symput('SEGMENTS'!!strip(put(_N_,BEST.)), strip(tranwrd(SegmentValue, '"','""'))) ;
+15448 +        call symput('COUNTS' !!strip(put(_N_,BEST.)),  strip(put(count, best.))) ;
+15449 +        numLevels + 1;
+15450 +        output;
+15451 +     %end;
+15452 +     %else %do;
+15453 +         if (cum < &EM_PROPERTY_OTHERPERCENTCUTOFF) or (trim(symget('OTHERWHERE')) eq ' ' and eof) then do;
+15454 +            call symput('SEGMENTS'!!strip(put(_N_,BEST.)), strip(tranwrd(SegmentValue, '"','""'))) ;
+15455 +            call symput('COUNTS' !!strip(put(_N_,BEST.)),  strip(put(count, best.))) ;
+15456 +            numLevels + 1;
+15457 +            output;
+15458 +         end;
+15459 +         else do;
+15460 +            %if &_segtype = C or &_segformat ne %then %do;
+15461 +                call symput('OTHERWHERE'  ,symget('OTHERWHERE'  ) !! ' ' !!
+15462 +                                     quote(strip(tranwrd(SegmentValue, '"','""'))));
+15463 +            %end;
+15464 +            %else %do;
+15465 +                call symput('OTHERWHERE'  ,symget('OTHERWHERE'  ) !! ' ' !! strip(SegmentValue));
+15466 +            %end;
+15467 +            othercount = othercount + count;
+15468 +            otherpct   = otherpct + percent;
+15469 +            if eof then do;
+15470 +               SegmentValue = '_OTHER_';
+15471 +               count   = othercount;
+15472 +               percent = otherpct;
+15473 +               numLevels + 1;
+15474 +               call symput('SEGMENTS'!! strip(put(numLevels,BEST.)), '_OTHER_') ;
+15475 +               call symput('COUNTS'  !! strip(put(numLevels,BEST.)),  strip(put(count, best.))) ;
+15476 +               output;
+15477 +            end;
+15478 +         end;
+15479 +         cum = cum + percent;
+15480 +     %end;
+15481 +     if eof then
+15482 +        call symput('numLevels', strip(put(numLevels,BEST.))) ;
+15483 +  run ;
+15484 +
+15485 +  title9 " " ;
+15486 +  title10 "%sysfunc(sasmsg(sashelp.dmine, rpt_frequency_title,  NOQUOTE, &_Segment))";
+15487 +  proc print data=_segs noobs label ;
+15488 +  run ;
+15489 +  title9;
+15490 +  title10;
+15491 +
+15492 +  proc append base=&_sizeDs data=_segs force;
+15493 +  run;
+15494 +
+15495 +  %let numvars= %eval(&EM_NUM_INPUT + &EM_NUM_REJECTED);
+15496 +  %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+15497 +      %let numvars= %eval(&EM_NUM_INPUT + &EM_NUM_REJECTED + &EM_NUM_TARGET);
+15498 +
+15499 +  /* Loop over segments */
+15500 +  %do i=1 %to &numLevels;
+15501 +     %if ^&numvars %then %do;
+15502 +         %if %sysfunc(exist(&_reportDs)) %then %do;
+15503 +             data _TEMPRULE(keep=SegmentVariable SegmentValue Variable Rank Worth);
+15504 +               label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+15505 +                     SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+15506 +                     Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+15507 +                     Rank            = "%sysfunc(sasmsg(sashelp.dmine, rpt_rank_vlabel,  NOQUOTE))"
+15508 +                     Worth           = "%sysfunc(sasmsg(sashelp.dmine, rpt_worth_vlabel,  NOQUOTE))";
+15509 +                length SegmentVariable $32 SegmentValue $200;
+15510 +                retain SegmentVariable "&_segment" SegmentValue "&&segments&i";
+15511 +                set &_reportDs;
+15512 +                Rank = _N_;
+15513 +             run;
+15514 +             proc append base=&_varsDs data=_TEMPRULE force;
+15515 +             run;
+15516 +         %end;
+15517 +         %goto doskip;
+15518 +     %end;
+15519 +
+15520 +     %if &_segformat ne %then %do;
+15521 +         %if %nrbquote(&&segments&i) = _OTHER_ %then
+15522 +             %let where= strip(put(&_segment, &_segformat)) in(&OTHERWHERE);
+15523 +         %else
+15524 +             %let where= strip(put(&_segment, &_segformat)) = "&&segments&i";
+15525 +     %end;
+15526 +     %else %do;
+15527 +         %if %nrbquote(&&segments&i) = _OTHER_ %then
+15528 +                 %let where= &_segment in(&OTHERWHERE);
+15529 +         %else %do;
+15530 +             %if &_segtype eq N %then
+15531 +                 %let where= &_segment = &&segments&i;
+15532 +             %else
+15533 +                 %let where= &_segment = "&&segments&i";
+15534 +         %end;
+15535 +     %end;
+15536 +
+15537 +     data &EM_NODEID._TMP / view=&EM_NODEID._TMP ;
+15538 +        set &EM_IMPORT_DATA(keep=%EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED %EM_INTERVAL_TARGET
+15539 +               %EM_BINARY_INPUT %EM_BINARY_REJECTED %EM_BINARY_TARGET
+15540 +               %EM_ORDINAL_INPUT  %EM_NOMINAL_INPUT %EM_ORDINAL_REJECTED %EM_NOMINAL_REJECTED
+15541 +               %EM_ORDINAL_TARGET %EM_NOMINAL_TARGET &_segment %EM_FREQ);
+15542 +        if &where then
+15543 +           _seg= 1 ;
+15544 +        else
+15545 +           _seg= 0 ;
+15546 +     run ;
+15547 +
+15548 +      %if (&EM_IMPORT_VALIDATE ne ) and (%sysfunc(exist(&EM_IMPORT_VALIDATE)) or %sysfunc(exist(&EM_IMPORT_VALIDATE, VIEW))) %then %do;
+15549 +          data &EM_NODEID._VALIDTMP / view=&EM_NODEID._VALIDTMP ;
+15550 +             set &EM_IMPORT_VALIDATE(keep=%EM_INTERVAL_INPUT %EM_INTERVAL_REJECTED %EM_INTERVAL_TARGET
+15551 +               %EM_BINARY_INPUT %EM_BINARY_REJECTED %EM_BINARY_TARGET
+15552 +               %EM_ORDINAL_INPUT  %EM_NOMINAL_INPUT %EM_ORDINAL_REJECTED %EM_NOMINAL_REJECTED
+15553 +               %EM_ORDINAL_TARGET %EM_NOMINAL_TARGET &_segment %EM_FREQ);
+15554 +
+15555 +             if &where then
+15556 +                _seg= 1 ;
+15557 +              else
+15558 +                 _seg= 0 ;
+15559 +          run ;
+15560 +      %end;
+15561 +
+15562 +     %if  (%eval(&EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED + &EM_NUM_INTERVAL_TARGET +
+15563 +               &EM_NUM_BINARY_INPUT + &EM_NUM_BINARY_REJECTED + &EM_NUM_BINARY_TARGET +
+15564 +               &EM_NUM_ORDINAL_INPUT  + &EM_NUM_NOMINAL_INPUT + &EM_NUM_ORDINAL_REJECTED  + &EM_NUM_NOMINAL_REJECTED +
+15565 +               &EM_NUM_ORDINAL_TARGET +  &EM_NUM_NOMINAL_TARGET) < 10000) %then %do;
+15566 +         %_arbor(target=_SEG, rules=_TEMPRULE, FIT=_FIT);
+15567 +     %end;
+15568 +     %else %do;
+15569 +        %_looparbor(level=INTERVAL, target=_SEG, rules=_TEMPRULE);
+15570 +        %_looparbor(level=NOMINAL,  target=_SEG, rules=_TEMPRULE);
+15571 +        %_looparbor(level=ORDINAL,  target=_SEG, rules=_TEMPRULE);
+15572 +     %end;
+15573 +
+15574 +     /* Keeping the important variables */
+15575 +     %if &EM_PROPERTY_MAXDEPTH = 1 %then %do;
+15576 +         data _TEMPRULE(rename=(Name=Variable numeric_value=Worth));
+15577 +            length Name $32;
+15578 +            label Name = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))";
+15579 +            retain Name;
+15580 +
+15581 +            set _temprule;
+15582 +
+15583 +            where stat in('VARIABLE','WORTH');
+15584 +
+15585 +            if stat = 'VARIABLE' then
+15586 +               Name = character_value;
+15587 +            else
+15588 +               output;
+15589 +         run;
+15590 +
+15591 +         proc sort data=_TEMPRULE;
+15592 +            by descending Worth;
+15593 +         run;
+15594 +
+15595 +         %if %sysfunc(exist(&_reportDs)) %then %do;
+15596 +             data _TEMPRULE;
+15597 +                set _TEMPRULE(obs=&EM_PROPERTY_MAXNUMINPUT) &_reportDs;
+15598 +             run;
+15599 +             proc sort data= _TEMPRULE nodupkey;
+15600 +                by variable;
+15601 +             run;
+15602 +             proc sort data=_TEMPRULE;
+15603 +                by descending Worth;
+15604 +             run;
+15605 +         %end;
+15606 +         data _TEMPRULE(keep=SegmentVariable SegmentValue Variable Rank Worth);
+15607 +              label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+15608 +                    SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+15609 +                    Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+15610 +                    Rank            = "%sysfunc(sasmsg(sashelp.dmine, rpt_rank_vlabel,  NOQUOTE))"
+15611 +                    Worth           = "%sysfunc(sasmsg(sashelp.dmine, rpt_worth_vlabel,  NOQUOTE))";
+15612 +            length SegmentVariable $32 SegmentValue $200;
+15613 +            retain SegmentVariable "&_segment" SegmentValue "&&segments&i";
+15614 +            %if ^%sysfunc(exist(&_reportDs)) %then %do;
+15615 +               set _TEMPRULE(obs=&EM_PROPERTY_MAXNUMINPUT);
+15616 +            %end;
+15617 +            %else %do;
+15618 +                set _TEMPRULE;
+15619 +            %end;
+15620 +            Rank = _N_;
+15621 +            if _N_=1 and worth ne . and (worth < &EM_PROPERTY_MINWORTH) then do;
+15622 +               put "&EM_CODEBAR";
+15623 +               put "* No input variable meet the minimum worth criterion of &EM_PROPERTY_MINWORTH.";
+15624 +               put "* You may identify profile variables by lowering this threshold, ";
+15625 +               put "* or by increasing the maximum depth of the decision tree used.";
+15626 +               put "&EM_CODEBAR";
+15627 +            end;
+15628 +         run;
+15629 +     %end;
+15630 +     %else %do;
+15631 +         %if %sysfunc(exist(&_reportDs)) %then %do;
+15632 +             data _TEMPRULE;
+15633 +                set _TEMPRULE(rename=(NAME=Variable) where=(IMPORTANCE >0)) &_reportDs;
+15634 +             run;
+15635 +             proc sort data= _TEMPRULE nodupkey;
+15636 +                by variable;
+15637 +             run;
+15638 +             proc sort data=_TEMPRULE;
+15639 +                by descending Importance;
+15640 +             run;
+15641 +         %end;
+15642 +         data _TEMPRULE(keep=SegmentVariable SegmentValue Variable Rank Importance);
+15643 +              label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+15644 +                  SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+15645 +                  Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+15646 +                  Importance      = "%sysfunc(sasmsg(sashelp.dmine, rpt_importance_vlabel,  NOQUOTE))"
+15647 +                  Rank            = "%sysfunc(sasmsg(sashelp.dmine, rpt_rank_vlabel,  NOQUOTE))";
+15648 +            length SegmentVariable $32 SegmentValue $200;
+15649 +            retain SegmentVariable "&_segment" SegmentValue "&&segments&i";
+15650 +            %if ^%sysfunc(exist(&_reportDs)) %then %do;
+15651 +               set _TEMPRULE(rename=(NAME=Variable) where=(IMPORTANCE >0));
+15652 +            %end;
+15653 +            %else %do;
+15654 +                set _TEMPRULE;
+15655 +            %end;
+15656 +            Rank = _N_;
+15657 +         run;
+15658 +     %end;
+15659 +
+15660 +     title9 "%sysfunc(sasmsg(sashelp.dmine, rpt_worth_title,  NOQUOTE, &_Segment, &&segments&i, &&counts&i))";
+15661 +     title10 "%sysfunc(sasmsg(sashelp.dmine, rpt_worth2_title,  NOQUOTE))";
+15662 +
+15663 +     %if &EM_PROPERTY_PRINTWORTH eq Y %then %do;
+15664 +         %if &EM_PROPERTY_MAXDEPTH = 1 %then %do;
+15665 +             proc print data=_TEMPRULE noobs label ;
+15666 +                var Variable Worth Rank;
+15667 +                where worth ne .;
+15668 +             run ;
+15669 +             data _TEMPRULE;
+15670 +                set _TEMPRULE;
+15671 +                where worth eq . or (worth >= &EM_PROPERTY_MINWORTH);
+15672 +             run;
+15673 +         %end;
+15674 +         %else %do;
+15675 +             proc print data=_TEMPRULE noobs label ;
+15676 +                var Variable Importance Rank;
+15677 +                where importance ne .;
+15678 +             run ;
+15679 +         %end;
+15680 +
+15681 +     %end ;
+15682 +
+15683 +     title9;
+15684 +     title10;
+15685 +
+15686 +     proc append base=&_varsDs data=_TEMPRULE force;
+15687 +     run;
+15688 +
+15689 +     %if %sysfunc(exist(_FIT)) %then %do;
+15690 +         data _FIT;
+15691 +            length SegmentVariable $32 SegmentValue $200;
+15692 +            retain SegmentVariable "&_Segment" SegmentValue "&&segments&i";
+15693 +
+15694 +            %if %sysfunc(exist(_FIT2)) %then %do;
+15695 +                merge _FIT(keep=_MISC_) _FIT2(keep=_VMISC_);
+15696 +            %end;
+15697 +            %else %do;
+15698 +                set _FIT(keep=_MISC_);
+15699 +            %end;
+15700 +
+15701 +         run;
+15702 +         proc append base=&_fitDs data=_FIT force;
+15703 +         run;
+15704 +     %end;
+15705 +
+15706 +     %doskip:
+15707 +
+15708 +     proc datasets lib=work nolist mt=(DATA VIEW);
+15709 +        delete _SEGS &EM_NODEID._TMP &EM_NODEID._VALIDTMP _STAT
+15710 +
+15711 +        %if %sysfunc(exist(_TEMPRULE)) %then %do;
+15712 +            _TEMPRULE
+15713 +        %end;
+15714 +        %if %sysfunc(exist(_FIT))>0 %then %do;
+15715 +            _FIT
+15716 +        %end;
+15717 +        %if %sysfunc(exist(_FIT2))>0 %then %do;
+15718 +            _FIT2
+15719 +        %end;
+15720 +     ;
+15721 +     run;
+15722 +     quit;
+15723 +  %end ;
+15724 +%mend tree_profile;
+15725 +
+15726 +/* This macro loops over segment variables and determines important variables */
+15727 +%macro em_profile(_segmentvar= , _sizeDS=WORK._SEGMENTSIZE,
+15728 +                  _varsDs=WORK._SELECTEDVARS, _fitDs=WORK._FITSTAT, _reportDs=);
+15729 +
+15730 +    %if _sizeDs eq %then %let _sizeDs = WORK._SEGMENTSIZE;
+15731 +    %if _varsDs eq %then %let _varsDs = WORK._SELECTEDVARS;
+15732 +    %if _fitDs  eq %then %let _fitDs  = WORK._FITSTAT;
+15733 +
+15734 +    %if _segmentvar eq %then %do;
+15735 +        %put &EM_CODEBAR;
+15736 +        %put * No segment variable defined ;
+15737 +        %put &EM_CODEBAR;
+15738 +        %goto doendep;
+15739 +    %end;
+15740 +
+15741 +    %let sndx = 0;
+15742 +
+15743 +    %let svar = &_segmentvar;
+15744 +    %if &svar ne %then %do;
+15745 +        %makeVarMacros(LEVEL=INTERVAL);
+15746 +        %makeVarMacros(LEVEL=NOMINAL);
+15747 +        %makeVarMacros(LEVEL=ORDINAL);
+15748 +    %end;
+15749 +
+15750 +    %do %while(&svar ne );
+15751 +        %let sndx= %eval(&sndx+1);
+15752 +        %let svar = %scan(&_segmentvar, &sndx,' ');
+15753 +        %if &svar ne %then
+15754 +            %tree_profile(segment=&svar, _sizeDS=&_sizeDs, _varsDs=&_varsDs, _fitDs=&_fitDs, _reportDs=&_reportDs);
+15755 +    %end ;
+15756 +
+15757 +    proc datasets lib=&EM_LIB nolist;
+15758 +       delete &EM_NODEID._MACS(mt=catalog);
+15759 +    run;
+15760 +
+15761 +    %doendep:
+15762 +%mend em_profile;
+15763 +
+15764 +%macro segmentSummary(SEGMENT=, _VARSDS=, FormatFref=);
+15765 +   %put &EM_CODEBAR;
+15766 +   %put * Summarizing variables ;
+15767 +   %put * SEGMENT= &segment;
+15768 +   %put &EM_CODEBAR;
+15769 +
+15770 +  %if (&_varsDs eq ) or ^%sysfunc(exist(&_VARSDS)) or ^%sysfunc(exist(&segment)) %then %goto doends;
+15771 +
+15772 +  %let _SEGMENT = &SEGMENT;
+15773 +
+15774 +  %let dsid       = %sysfunc(open(&_segment));
+15775 +  %let segnum     = %sysfunc(varnum(&dsid, &_segment));
+15776 +  %let _segtype   = %sysfunc(vartype(&dsid, &segnum));
+15777 +  %let _segformat = %sysfunc(varfmt(&dsid, &segnum));
+15778 +
+15779 +  %let dsid=%sysfunc(close(&dsid));
+15780 +
+15781 +  %let SEGMENTS=;
+15782 +  %let COUNTS=;
+15783 +  %let OTHERWHERE=;
+15784 +  %let numLevels=;
+15785 +  data _null_;
+15786 +     retain cum othercount otherpct  numLevels 0;
+15787 +     format Count 8.;
+15788 +     set &_segment end=eof;
+15789 +
+15790 +     %if &_segformat ne %then %do;
+15791 +         SegmentValue= strip(put(&_segment, &_segformat));
+15792 +     %end;
+15793 +     %else %do;
+15794 +        %if &_segtype = N %then %do;
+15795 +            SegmentValue= strip(put(&_segment, best12.));
+15796 +        %end;
+15797 +        %else %do;
+15798 +            SegmentValue = &_segment;
+15799 +        %end;
+15800 +     %end;
+15801 +
+15802 +     %if &EM_PROPERTY_PROFILEALL eq Y %then %do;
+15803 +         call symput('SEGMENTS'!!strip(put(_N_,BEST.)), strip(tranwrd(SegmentValue, '"','""'))) ;
+15804 +         call symput('COUNTS' !!strip(put(_N_,BEST.)),  strip(put(count, best.))) ;
+15805 +         numLevels + 1;
+15806 +         output;
+15807 +     %end;
+15808 +     %else %do;
+15809 +         if (cum < &EM_PROPERTY_OTHERPERCENTCUTOFF) or (trim(symget('OTHERWHERE')) eq ' ' and eof) then do;
+15810 +            call symput('SEGMENTS'!!strip(put(_N_,BEST.)), strip(tranwrd(SegmentValue, '"','""'))) ;
+15811 +            call symput('COUNTS' !!strip(put(_N_,BEST.)),  strip(put(count, best.))) ;
+15812 +            numLevels + 1;
+15813 +            output;
+15814 +         end;
+15815 +         else do;
+15816 +            %if &_segtype = C or &_segformat ne %then %do;
+15817 +                call symput('OTHERWHERE'  ,symget('OTHERWHERE'  ) !! ' ' !!
+15818 +                                     quote(strip(tranwrd(SegmentValue, '"','""'))));
+15819 +            %end;
+15820 +            %else %do;
+15821 +                call symput('OTHERWHERE'  ,symget('OTHERWHERE'  ) !! ' ' !! strip(SegmentValue));
+15822 +            %end;
+15823 +            othercount = othercount + count;
+15824 +            otherpct   = otherpct + percent;
+15825 +            if eof then do;
+15826 +               SegmentValue = '_OTHER_';
+15827 +               count   = othercount;
+15828 +               percent = otherpct;
+15829 +               numLevels + 1;
+15830 +               call symput('SEGMENTS'!! strip(put(numLevels,BEST.)), '_OTHER_') ;
+15831 +               call symput('COUNTS'  !! strip(put(numLevels,BEST.)),  strip(put(count, best.))) ;
+15832 +               output;
+15833 +            end;
+15834 +         end;
+15835 +         cum = cum + percent;
+15836 +     %end;
+15837 +     if eof then
+15838 +        call symput('numLevels', strip(put(numLevels,BEST.))) ;
+15839 +  run ;
+15840 +
+15841 +  /* Loop over segments */
+15842 +  %do S = 1 %to &numLevels;
+15843 +     %if &_segformat ne %then %do;
+15844 +         %if %nrbquote(&&segments&s) = _OTHER_ %then
+15845 +             %let where= strip(put(&_segment, &_segformat)) in(&OTHERWHERE);
+15846 +         %else
+15847 +             %let where= strip(put(&_segment, &_segformat)) = "&&segments&s";
+15848 +     %end;
+15849 +     %else %do;
+15850 +         %if %nrbquote(&&segments&s) = _OTHER_ %then
+15851 +                 %let where= &_segment in(&OTHERWHERE);
+15852 +         %else %do;
+15853 +             %if &_segtype eq N %then
+15854 +                 %let where= &_segment = &&segments&s;
+15855 +             %else
+15856 +                 %let where= &_segment = "&&segments&s";
+15857 +         %end;
+15858 +     %end;
+15859 +
+15860 +     %let SEGVARS=;
+15861 +     %let SEGCLASS=;
+15862 +     data _tempStat;
+15863 +        set &_varsDs;
+15864 +        where  SegmentVariable="&_segment" and SegmentValue="&&segments&s";
+15865 +        if Type eq 'I' then
+15866 +           call symput('SEGVARS',symget('SEGVARS' ) !! ' ' !! trim(left(Variable))) ;
+15867 +        else
+15868 +           call symput('SEGCLASS',symget('SEGCLASS' ) !! ' ' !! trim(left(Variable))) ;
+15869 +     run ;
+15870 +
+15871 +     %let _nobs = 0;
+15872 +     %let dsid = %sysfunc(open(_tempStat));
+15873 +     %if &dsid %then %do;
+15874 +         %let _nobs = %sysfunc(attrn(&dsid, NLOBS));
+15875 +         %let dsid = %sysfunc(close(&dsid));
+15876 +     %end;
+15877 +     %if &_nobs<1 %then %goto doskips;
+15878 +
+15879 +     proc sort data=_tempStat;
+15880 +        by Variable;
+15881 +     run;
+15882 +
+15883 +     data &EM_NODEID._TMP / view=&EM_NODEID._TMP ;
+15884 +        set &EM_IMPORT_DATA;
+15885 +
+15886 +        where &where;
+15887 +
+15888 +        %if (&FormatFref ne ) and (&segvars ne ) %then %do;
+15889 +            %inc &FormatFref;
+15890 +        %end;
+15891 +     run;
+15892 +
+15893 +     /* Profile Segment */
+15894 +     %if &segclass ne %then %do;
+15895 +         %class_profile(DATA=&EM_NODEID._TMP, OUTPUT=_CLASS, VARS=&SEGCLASS, STAT=_STAT, FREQ=%EM_FREQ);
+15896 +         data _CLASS;
+15897 +            length SegmentVariable $32 SegmentValue $200;
+15898 +            retain SegmentVariable "&_Segment" SegmentValue "&&segments&s";
+15899 +            label Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+15900 +                   value    = "%sysfunc(sasmsg(sashelp.dmine, rpt_value_vlabel,  NOQUOTE))"
+15901 +                   count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))"
+15902 +                   percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))";
+15903 +            set _CLASS;
+15904 +         run;
+15905 +         proc append base=&EM_USER_CLASSDIST data=_CLASS force;
+15906 +         run;
+15907 +         data _tempStat;
+15908 +            merge _tempStat _STAT;
+15909 +            by VARIABLE;
+15910 +         run;
+15911 +     %end;
+15912 +     %if &segvars ne %then %do;
+15913 +         %var_profile(DATA=&EM_NODEID._TMP, OUTPUT=_INTERVAL, VARS=&SEGVARS,
+15914 +                           STAT=_STAT, BIN=N, FREQ=%EM_FREQ, NUMBARS= &EM_PROPERTY_NUMHISTBARS);
+15915 +         data _INTERVAL;
+15916 +             length SegmentVariable $32 SegmentValue $200;
+15917 +             retain SegmentVariable "&_Segment" SegmentValue "&&segments&s";
+15918 +             label Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+15919 +                   value    = "%sysfunc(sasmsg(sashelp.dmine, rpt_value_vlabel,  NOQUOTE))"
+15920 +                   count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))"
+15921 +                   percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))";
+15922 +             set _INTERVAL;
+15923 +         run;
+15924 +
+15925 +         proc append base=&EM_USER_INTDIST data=_INTERVAL force;
+15926 +         run;
+15927 +
+15928 +         proc sort data=_STAT(KEEP=VARIABLE NMISS MIN MAX MEAN STD SKEWNESS KURTOSIS);
+15929 +            by VARIABLE;
+15930 +         run;
+15931 +         data _tempStat;
+15932 +            merge _tempStat _STAT;
+15933 +            by VARIABLE;
+15934 +         run;
+15935 +
+15936 +     %end;
+15937 +
+15938 +     proc sort data=_tempStat;
+15939 +        by Rank;
+15940 +     run;
+15941 +     proc append base=&EM_USER_STATS data=_tempStat force;
+15942 +     run;
+15943 +
+15944 +     %doskips:
+15945 +
+15946 +     proc datasets lib=work nolist mt=(DATA VIEW);
+15947 +        delete _segment &EM_NODEID._TMP _interval _class
+15948 +
+15949 +        %if %sysfunc(exist(_tempStat))>0 %then %do;
+15950 +            _tempStat
+15951 +        %end;
+15952 +     ;
+15953 +     run;
+15954 +     quit;
+15955 +
+15956 +
+15957 +  %end ;
+15958 +%mend segmentSummary;
+15959 +
+15960 +%macro train;
+15961 +
+15962 +   /* Retrieve data set name */
+15963 +   %EM_GETNAME(KEY=SIZE,       TYPE=DATA);
+15964 +   %EM_GETNAME(KEY=FIT,        TYPE=DATA);
+15965 +   %EM_GETNAME(KEY=STATS,      TYPE=DATA);
+15966 +   %EM_GETNAME(KEY=WORTH,      TYPE=DATA);
+15967 +   %EM_GETNAME(KEY=IMPORTANCE, TYPE=DATA);
+15968 +   %EM_GETNAME(KEY=CLASSDIST,  TYPE=DATA);
+15969 +   %EM_GETNAME(KEY=INTDIST,    TYPE=DATA);
+15970 +   %EM_GETNAME(KEY=SELVARS,    TYPE=DATA);
+15971 +
+15972 +   /* Delete previous data sets */
+15973 +   proc datasets lib=&EM_LIB nolist;
+15974 +      delete &EM_NODEID._SIZE  &EM_NODEID._STATS &EM_NODEID._FIT &EM_NODEID._WORTH
+15975 +             &EM_NODEID._IMPORTANCE &EM_NODEID._SELVARS
+15976 +             &EM_NODEID._CLASSDIST  &EM_NODEID._INTDIST &EM_NODEID._MACS(mt=catalog);
+15977 +   run;
+15978 +
+15979 +   %if (%sysfunc(exist(&EM_IMPORT_DATA))<1 and %sysfunc(exist(&EM_IMPORT_DATA, VIEW))<1)
+15980 +       or (&EM_IMPORT_DATA eq ) %then %do;
+15981 +       %let  EMEXCEPTIONSTRING = exception.server.emtool.PROFNEEDTRAINDATASET;
+15982 +       %goto doendpt;
+15983 +   %end;
+15984 +
+15985 +    proc sort data=&EM_DATA_VARIABLESET;
+15986 +       by Name;
+15987 +    run;
+15988 +
+15989 +    %let _segmentvar = %EM_SEGMENT %EM_TREATMENT;
+15990 +
+15991 +    %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq SEGMENT) %then
+15992 +        %let _segmentvar= &_segmentvar %EM_BINARY_TARGET %EM_NOMINAL_TARGET %EM_ORDINAL_TARGET;
+15993 +
+15994 +    /* Add report variables */
+15995 +    %let REPORT_VARS = ;
+15996 +    %if  (%upcase(&EM_PROPERTY_TARGETROLE) eq REPORT) %then %do;
+15997 +        %let REPORT_VARS = %EM_TARGET;
+15998 +    %end;
+15999 +    %if &EM_PROPERTY_USEREPORTVARS eq Y %then %do;
+16000 +        %let REPORT_VARS = &REPORT_VARS %EM_REPORT_VARS;
+16001 +    %end;
+16002 +
+16003 +    %if &REPORT_VARS ne %then %do;
+16004 +        data _tempreport;
+16005 +           length Variable $32;
+16006 +
+16007 +        %let rndx= 0 ;
+16008 +        %let rvar  = &REPORT_VARS;
+16009 +        %do %while( &rndx < &EM_PROPERTY_MAXNUMREPORT and &rvar ne  ) ;
+16010 +            %let rndx= %eval(&rndx+1);
+16011 +            %let rvar = %scan(&REPORT_VARS, &rndx, ' ') ;
+16012 +            %if &rvar ne %then %do;
+16013 +                Variable="&rvar"; output;
+16014 +            %end ;
+16015 +        %end;
+16016 +
+16017 +        run;
+16018 +    %end;
+16019 +
+16020 +    %em_profile(_segmentvar=&_segmentvar, _sizeDs=&EM_USER_SIZE,
+16021 +                _varsDs=&EM_USER_SELVARS, _fitDs=&EM_USER_FIT, _reportDs=_tempReport);
+16022 +
+16023 +    %if ^%sysfunc(exist(&EM_USER_SELVARS)) and (&REPORT_VARS eq ) %then %goto doendpt;
+16024 +
+16025 +    %if ^%sysfunc(exist(&EM_USER_SELVARS)) %then %do;
+16026 +        data &EM_USER_SELVARS;
+16027 +           set _tempreport;
+16028 +        run;
+16029 +    %end;
+16030 +
+16031 +    proc sort data=&EM_USER_SELVARS;
+16032 +       by Variable;
+16033 +    run;
+16034 +    data &EM_USER_SELVARS;
+16035 +       length Type $1;
+16036 +       label Type = "%sysfunc(sasmsg(sashelp.dmine, meta_type_vlabel,  NOQUOTE))";
+16037 +       merge &EM_USER_SELVARS(in=a) &EM_DATA_VARIABLESET(keep=NAME LEVEL LABEL rename=(NAME=Variable));
+16038 +       by Variable;
+16039 +       if LABEL eq '' then LABEL=VARIABLE;
+16040 +       if a then do;
+16041 +          if LEVEL = 'INTERVAL' then Type = 'I';
+16042 +          else Type = 'C';
+16043 +           output;
+16044 +       end;
+16045 +       drop LEVEL;
+16046 +    run;
+16047 +
+16048 +    proc sort data=&EM_USER_SELVARS out=_SummaryVars nodupkey;
+16049 +       by Variable;
+16050 +    run;
+16051 +    %if &EM_PROPERTY_MAXDEPTH > 1 %then %let selStat = Importance;
+16052 +    %else
+16053 +        %let selStat = Worth;
+16054 +
+16055 +   data &EM_USER_STATS(keep=Type SegmentVariable SegmentValue Variable Label Rank &selStat);
+16056 +       length Type $1;
+16057 +       label Type = "%sysfunc(sasmsg(sashelp.dmine, meta_type_vlabel,  NOQUOTE))";
+16058 +       set _SummaryVars;
+16059 +       SegmentVariable= "_OVERALL_"; SegmentValue= "&EM_IMPORT_DATA"  ;
+16060 +       rank = .; &selStat=.;
+16061 +       if Label eq '' then Label=Variable;
+16062 +   run;
+16063 +
+16064 +    /* Profile Entire Data */
+16065 +   %put &EM_CODEBAR;
+16066 +   %put * Profile Entire Data ;
+16067 +   %put &EM_CODEBAR;
+16068 +
+16069 +    %let segvars=;
+16070 +    %let segclass=;
+16071 +    data _null_;
+16072 +       set  &EM_USER_STATS;
+16073 +       if Type = 'I' then
+16074 +          call symput('SEGVARS',symget('SEGVARS' ) !! ' ' !! trim(left(Variable))) ;
+16075 +       else
+16076 +          call symput('SEGCLASS',symget('SEGCLASS' ) !! ' ' !! trim(left(Variable))) ;
+16077 +    run ;
+16078 +
+16079 +    %if &segclass ne %then %do;
+16080 +        %class_profile(DATA=&EM_IMPORT_DATA, OUTPUT=_CLASS, VARS=&SEGCLASS, STAT=_STAT, FREQ=%EM_FREQ);
+16081 +        data _CLASS;
+16082 +           length SegmentVariable $32 SegmentValue $200;
+16083 +           retain SegmentVariable "_OVERALL_" SegmentValue "&EM_IMPORT_DATA";
+16084 +           label  variable = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+16085 +                  value    = "%sysfunc(sasmsg(sashelp.dmine, rpt_value_vlabel,  NOQUOTE))"
+16086 +                  count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))"
+16087 +                  percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))";
+16088 +           set _CLASS;
+16089 +        run;
+16090 +        proc append base=&EM_USER_CLASSDIST data=_CLASS force;
+16091 +        run;
+16092 +
+16093 +        proc sort data=_STAT;
+16094 +           by VARIABLE;
+16095 +        run;
+16096 +        data &EM_USER_STATS;
+16097 +            merge  &EM_USER_STATS _STAT;
+16098 +            by VARIABLE;
+16099 +        run;
+16100 +    %end;
+16101 +    %if &segvars ne %then %do;
+16102 +        /* Computing Min and Max for Interval Variables */
+16103 +        %var_profile(DATA=&EM_IMPORT_DATA, OUTPUT=_INTERVAL, VARS=&SEGVARS,
+16104 +                          STAT=_STAT, BINDATA=DATA_STAT, FREQ=%EM_FREQ, BIN=Y, NUMBARS= &EM_PROPERTY_NUMHISTBARS);
+16105 +        data _INTERVAL;
+16106 +           length SegmentVariable $32 SegmentValue $200;
+16107 +           retain SegmentVariable "_OVERALL_" SegmentValue "&EM_IMPORT_DATA";
+16108 +           label  variable = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+16109 +                  value    = "%sysfunc(sasmsg(sashelp.dmine, rpt_value_vlabel,  NOQUOTE))"
+16110 +                  count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))"
+16111 +                  percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))";
+16112 +           set _INTERVAL;
+16113 +        run;
+16114 +
+16115 +        proc append base=&EM_USER_INTDIST data=_INTERVAL force;
+16116 +        run;
+16117 +
+16118 +        proc sort data=_STAT(KEEP=VARIABLE NMISS MIN MAX MEAN STD SKEWNESS KURTOSIS) OUT=_STAT;
+16119 +           by VARIABLE;
+16120 +        run;
+16121 +        data &EM_USER_STATS;
+16122 +            merge  &EM_USER_STATS _STAT;
+16123 +            by VARIABLE;
+16124 +        run;
+16125 +    %end;
+16126 +
+16127 +    filename X catalog "&EM_LIB..&EM_NODEID._INTERVAL.FORMAT.source";
+16128 +
+16129 +    %if %sysfunc(exist(&EM_LIB..&EM_NODEID._INTERVAL, 'CATALOG')) %then %do;
+16130 +        proc datasets lib=&EM_LIB nolist;
+16131 +           delete &EM_NODEID._INTERVAL(mt=catalog);
+16132 +        run;
+16133 +    %end;
+16134 +
+16135 +    %if %sysfunc(exist(DATA_STAT)) %then %do;
+16136 +        data _null_;
+16137 +           file X;
+16138 +
+16139 +           %let dsid    =%sysfunc(open(DATA_STAT));
+16140 +           %let namenum = %sysfunc(varnum(&dsid, VARIABLE));
+16141 +           %let fmtnum  = %sysfunc(varnum(&dsid, FORMAT));
+16142 +           %let obs = %sysfunc(fetch(&dsid));
+16143 +
+16144 +           put 'format' ;
+16145 +
+16146 +           %let _count = 0;
+16147 +           %let _VARS=;
+16148 +           %do %while(&obs=0);
+16149 +
+16150 +               %let _count = %eval(&_count +1);
+16151 +               %let _name = %sysfunc(getvarc(&dsid, &namenum));
+16152 +               %let _VARS = &_VARS &_name;
+16153 +               %let _fmtname = %sysfunc(getvarc(&dsid, &fmtnum));
+16154 +               %do;
+16155 +                  put "&_name &_fmtname..";
+16156 +               %end;
+16157 +               %let obs = %sysfunc(fetch(&dsid));
+16158 +           %end;
+16159 +           %let dsid=%sysfunc(close(&dsid));
+16160 +           put ';';
+16161 +        run;
+16162 +    %end;
+16163 +
+16164 +    /* Profile Segments */
+16165 +    %if _segmentvar eq %then %goto doendpt;
+16166 +    %let sndx = 0;
+16167 +
+16168 +    %let svar = &_segmentvar;
+16169 +    %do %while(&svar ne );
+16170 +        %let sndx= %eval(&sndx+1);
+16171 +        %let svar = %scan(&_segmentvar, &sndx,' ');
+16172 +        %if &svar ne %then
+16173 +            %segmentSummary(segment=&svar, _varsDs=&EM_USER_SELVARS, FormatFref=X);
+16174 +    %end ;
+16175 +
+16176 +    filename X;
+16177 +
+16178 +    %doendpt:
+16179 +
+16180 +
+16181 +    /* Set reports for the node */
+16182 +    %let _keys= SIZE STATS CLASSDIST INTDIST;
+16183 +
+16184 +    %if %sysfunc(exist( &EM_USER_CLASSDIST)) or  %sysfunc(exist(&EM_USER_INTDIST)) %then %do;
+16185 +        %if %sysfunc(exist(&EM_USER_INTDIST)) %then %do;
+16186 +            data &EM_USER_INTDIST;
+16187 +               set &EM_USER_INTDIST;
+16188 +               label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+16189 +                     SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+16190 +                     Color           = "%sysfunc(sasmsg(sashelp.dmine, rpt_color_vlabel,  NOQUOTE))";
+16191 +               if SegmentVariable = '_OVERALL_' then Color = 1;
+16192 +               else Color = 0;
+16193 +            run;
+16194 +        %end;
+16195 +        %if %sysfunc(exist(&EM_USER_CLASSDIST)) %then %do;
+16196 +            data &EM_USER_CLASSDIST;
+16197 +               set &EM_USER_CLASSDIST;
+16198 +               label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+16199 +                     SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+16200 +                     Groupindex      = "%sysfunc(sasmsg(sashelp.dmine, rpt_groupIndex_vlabel,  NOQUOTE))";
+16201 +               if SegmentVariable = '_OVERALL_' then GroupIndex = 0;
+16202 +               else GroupIndex = 1;
+16203 +            run;
+16204 +        %end;
+16205 +
+16206 +        %let svar = &_segmentvar;
+16207 +        %let sndx = 0;
+16208 +        %do %while(&svar ne );
+16209 +            %let sndx= %eval(&sndx+1);
+16210 +            %let svar = %scan(&_segmentvar, &sndx,' ');
+16211 +            %if &svar ne %then %do;
+16212 +                %let autodisplay = N;
+16213 +                %if &sndx = 1 %then
+16214 +                    %let autodisplay = Y;
+16215 +                %EM_REPORT(KEY=&_keys, VIEWTYPE=PROFILEVIEW, DESCRIPTION=Profileview, SEGMENTVALUE=&svar,
+16216 +                      STATS=STATS, SIZE=SIZE, CLASSDIST=CLASSDIST, INTDIST=INTDIST, AUTODISPLAY=&autodisplay, BLOCK=Plot,
+16217 +                      LOCALIZE=Y, COLOR=COLOR);
+16218 +            %end;
+16219 +        %end ;
+16220 +    %end;
+16221 +
+16222 +    %if %sysfunc(exist( &EM_USER_STATS)) %then %do;
+16223 +        %if &EM_PROPERTY_MAXDEPTH = 1 %then %do;
+16224 +            data &EM_USER_WORTH;
+16225 +               set &EM_USER_STATS;
+16226 +               label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+16227 +                     SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+16228 +                     Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+16229 +                     Rank   = "%sysfunc(sasmsg(sashelp.dmine, rpt_rank_vlabel,  NOQUOTE))"
+16230 +                     Worth  = "%sysfunc(sasmsg(sashelp.dmine, rpt_worth_vlabel,  NOQUOTE))";
+16231 +               where WORTH ne .;
+16232 +            run;
+16233 +            %EM_REPORT(KEY=WORTH,     VIEWTYPE=BAR,  BY=SEGMENTVALUE, X=VARIABLE, FREQ=WORTH,
+16234 +                  AUTODISPLAY=Y, REPORTID=SEGMENTVARIABLE, IDVALUE=WORTH, DESCRIPTION=profworth, BLOCK=Plot,
+16235 +                  LOCALIZE=Y, NCOLS=1);
+16236 +        %end;
+16237 +        %else %do;
+16238 +            data &EM_USER_IMPORTANCE;
+16239 +               set &EM_USER_STATS;
+16240 +               label SegmentVariable = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvariable_vlabel,  NOQUOTE))"
+16241 +                  SegmentValue    = "%sysfunc(sasmsg(sashelp.dmine, rpt_segmentvalue_vlabel,  NOQUOTE))"
+16242 +                  Variable        = "%sysfunc(sasmsg(sashelp.dmine, rpt_variable_vlabel,  NOQUOTE))"
+16243 +                  Importance      = "%sysfunc(sasmsg(sashelp.dmine, rpt_importance_vlabel,  NOQUOTE))"
+16244 +                  Rank            = "%sysfunc(sasmsg(sashelp.dmine, rpt_rank_vlabel,  NOQUOTE))";
+16245 +               where IMPORTANCE ne .;
+16246 +            run;
+16247 +            %EM_REPORT(KEY=IMPORTANCE, VIEWTYPE=BAR,  BY=SEGMENTVALUE, X=VARIABLE, FREQ=IMPORTANCE,
+16248 +                  AUTODISPLAY=Y, REPORTID=SEGMENTVARIABLE, IDVALUE=IMPORTANCE, DESCRIPTION=profimportance, BLOCK=Plot,
+16249 +                  LOCALIZE=Y, NCOLS=1);
+16250 +       %end;
+16251 +    %end;
+16252 +
+16253 +    %if %sysfunc(exist( &EM_USER_SIZE)) %then %do;
+16254 +        %if %sysfunc(exist( &EM_USER_FIT)) %then %do;
+16255 +            data &EM_USER_SIZE;
+16256 +               merge &EM_USER_SIZE &EM_USER_FIT;
+16257 +               label percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))"
+16258 +                     count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))";
+16259 +               format PERCENT 5.2;
+16260 +               format COUNT 12.;
+16261 +            run;
+16262 +        %end;
+16263 +        %else %do;
+16264 +            data &EM_USER_SIZE;
+16265 +               set &EM_USER_SIZE;
+16266 +               label percent  = "%sysfunc(sasmsg(sashelp.dmine, rpt_percent_vlabel,  NOQUOTE))"
+16267 +                     count    = "%sysfunc(sasmsg(sashelp.dmine, rpt_count_vlabel,  NOQUOTE))";
+16268 +               format PERCENT 5.2;
+16269 +               format COUNT 12.;
+16270 +            run;
+16271 +        %end;
+16272 +
+16273 +        %EM_REPORT(KEY=SIZE, VIEWTYPE=PIE, DESCRIPTION=segmentmanysize, X=SEGMENTVALUE, Y=COUNT, TIPTEXT=PERCENT,
+16274 +                   REPORTID=SEGMENTVARIABLE, IDVALUE=SIZE, BLOCK=Plot, AUTODISPLAY=Y, LOCALIZE=Y);
+16275 +
+16276 +    %end;
+16277 +
+16278 +    %EM_REPORT(KEY=SIZE,      VIEWTYPE=DATA, DESCRIPTION=size,                BLOCK=Stats);
+16279 +    %EM_REPORT(KEY=STATS,     VIEWTYPE=DATA, DESCRIPTION=profilevars,         BLOCK=Stats);
+16280 +    %EM_REPORT(KEY=CLASSDIST, VIEWTYPE=DATA, DESCRIPTION=clusbarplot,         BLOCK=Stats);
+16281 +    %EM_REPORT(KEY=INTDIST,   VIEWTYPE=DATA, DESCRIPTION=clushistplot,        BLOCK=Stats);
+16282 +
+16283 +    proc datasets lib=&EM_LIB nolist;
+16284 +       delete &EM_NODEID._SELVARS _SUMMARYVARS DATA_STAT &EM_NODEID._MACS(mt=catalog) &EM_NODEID._INTERVAL(mt=catalog);
+16285 +    run;
+16286 +
+16287 +%mend train;
+16288 +
+16289 +
+16290 +
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+ 
+NOTE: The file EMWS1.PROF_SIZE (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_STATS (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_FIT (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_WORTH (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_IMPORTANCE (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_SELVARS (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_CLASSDIST (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_INTDIST (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_MACS (memtype=CATALOG) was not found, but appears on a DELETE statement.
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 17 observations read from the data set EMWS1.PROF_VARIABLESET.
+NOTE: The data set EMWS1.PROF_VARIABLESET has 17 observations and 21 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The file X is:
+      Catalog Name=EMWS1.PROF_MACS.NOMINAL_1.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=4,
+      Created=Sunday, 22 December 2019 19:47:44,
+      Last Modified=Sunday, 22 December 2019 19:47:44,
+      Filename=C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\Gold_Price\Workspaces\EMWS1\prof_macs.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 4 records were written to the file X.
+      The minimum record length was 15.
+      The maximum record length was 69.
+NOTE: There were 6 observations read from the data set EMWS1.PROF_VARIABLESET.
+      WHERE ((ROLE='REJECTED') and LEVEL in ('BINARY', 'NOMINAL') and (USE='Y')) or ((ROLE='INPUT') and LEVEL in ('BINARY', 'NOMINAL') and USE in ('D', 'Y'));
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Fileref X has been deassigned.
+*------------------------------------------------------------*
+* Filtering input variables
+* SEGMENT= _SEGMENT_
+*------------------------------------------------------------*
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.16 seconds
+      cpu time            0.10 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: The data set WORK._SEGMENT_ has 4 observations and 3 variables.
+NOTE: PROCEDURE FREQ used (Total process time):
+      real time           0.22 seconds
+      cpu time            0.12 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._SEGMENT_.
+NOTE: The data set WORK._SEGMENT_ has 4 observations and 3 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._SEGMENT_.
+NOTE: The data set WORK._SEGS has 4 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._SEGS.
+NOTE: The PROCEDURE PRINT printed page 2.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._SEGS to EMWS1.PROF_SIZE.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 4 observations read from the data set WORK._SEGS.
+NOTE: The data set EMWS1.PROF_SIZE has 4 observations and 4 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.13 seconds
+      cpu time            0.11 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.19 seconds
+      cpu time            0.14 seconds
+ 
+ 
+NOTE: 1495906 kilobytes of physical memory.
+NOTE: Will use 1823 out of 1823 training cases.
+NOTE: Using memory pool with 37406720 bytes.
+NOTE: Passed training data 2 times.
+NOTE: Training used 332224 bytes of work memory.
+NOTE: The subtree sequence contains 2 subtrees. The largest has 6 nodes and 5 leaves.
+NOTE: Using subtree with 6 nodes and 5 leaves.
+NOTE: Using subtree with 6 nodes and 5 leaves.
+NOTE: The data set WORK._RULE has 52 observations and 6 variables.
+ 
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.24 seconds
+      cpu time            0.21 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: There were 1823 observations read from the data set WORK.PROF_TMP.
+NOTE: PROCEDURE ARBOR used (Total process time):
+      real time           0.29 seconds
+      cpu time            0.25 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._RULE to WORK._TEMPRULE.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 52 observations read from the data set WORK._RULE.
+NOTE: The data set WORK._TEMPRULE has 52 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Deleting WORK._RULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPRULE.
+      WHERE stat in ('VARIABLE', 'WORTH');
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+      WHERE worth not = .;
+NOTE: The PROCEDURE PRINT printed page 3.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPRULE.
+      WHERE (worth=.) or (worth>=0.01);
+NOTE: The data set WORK._TEMPRULE has 5 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPRULE to EMWS1.PROF_SELVARS.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 5 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set EMWS1.PROF_SELVARS has 5 observations and 5 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: The file WORK.PROF_VALIDTMP (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._STAT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK._SEGS (memtype=DATA).
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._TEMPRULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.07 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.09 seconds
+ 
+ 
+NOTE: 1495292 kilobytes of physical memory.
+NOTE: Will use 1823 out of 1823 training cases.
+NOTE: Using memory pool with 37406720 bytes.
+NOTE: Passed training data 2 times.
+NOTE: Training used 332224 bytes of work memory.
+NOTE: The subtree sequence contains 2 subtrees. The largest has 3 nodes and 2 leaves.
+NOTE: Using subtree with 3 nodes and 2 leaves.
+NOTE: Using subtree with 3 nodes and 2 leaves.
+NOTE: The data set WORK._RULE has 52 observations and 6 variables.
+ 
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.23 seconds
+      cpu time            0.18 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: There were 1823 observations read from the data set WORK.PROF_TMP.
+NOTE: PROCEDURE ARBOR used (Total process time):
+      real time           0.26 seconds
+      cpu time            0.20 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._RULE to WORK._TEMPRULE.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 52 observations read from the data set WORK._RULE.
+NOTE: The data set WORK._TEMPRULE has 52 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: Deleting WORK._RULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPRULE.
+      WHERE stat in ('VARIABLE', 'WORTH');
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.13 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+      WHERE worth not = .;
+NOTE: The PROCEDURE PRINT printed page 4.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPRULE.
+      WHERE (worth=.) or (worth>=0.01);
+NOTE: The data set WORK._TEMPRULE has 5 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPRULE to EMWS1.PROF_SELVARS.
+NOTE: There were 5 observations read from the data set WORK._TEMPRULE.
+NOTE: 5 observations added.
+NOTE: The data set EMWS1.PROF_SELVARS has 10 observations and 5 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGS (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK.PROF_VALIDTMP (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._STAT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._TEMPRULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.07 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.10 seconds
+ 
+ 
+NOTE: 1495292 kilobytes of physical memory.
+NOTE: Will use 1823 out of 1823 training cases.
+NOTE: Using memory pool with 37406720 bytes.
+NOTE: Passed training data 2 times.
+NOTE: Training used 332224 bytes of work memory.
+NOTE: The subtree sequence contains 2 subtrees. The largest has 6 nodes and 5 leaves.
+NOTE: Using subtree with 6 nodes and 5 leaves.
+NOTE: Using subtree with 6 nodes and 5 leaves.
+NOTE: The data set WORK._RULE has 52 observations and 6 variables.
+ 
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.23 seconds
+      cpu time            0.15 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: There were 1823 observations read from the data set WORK.PROF_TMP.
+NOTE: PROCEDURE ARBOR used (Total process time):
+      real time           0.26 seconds
+      cpu time            0.17 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._RULE to WORK._TEMPRULE.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 52 observations read from the data set WORK._RULE.
+NOTE: The data set WORK._TEMPRULE has 52 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Deleting WORK._RULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPRULE.
+      WHERE stat in ('VARIABLE', 'WORTH');
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.13 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+      WHERE worth not = .;
+NOTE: The PROCEDURE PRINT printed page 5.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPRULE.
+      WHERE (worth=.) or (worth>=0.01);
+NOTE: The data set WORK._TEMPRULE has 4 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPRULE to EMWS1.PROF_SELVARS.
+NOTE: There were 4 observations read from the data set WORK._TEMPRULE.
+NOTE: 4 observations added.
+NOTE: The data set EMWS1.PROF_SELVARS has 14 observations and 5 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGS (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK.PROF_VALIDTMP (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._STAT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._TEMPRULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.13 seconds
+      cpu time            0.09 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.19 seconds
+      cpu time            0.12 seconds
+ 
+ 
+NOTE: 1495087 kilobytes of physical memory.
+NOTE: Will use 1823 out of 1823 training cases.
+NOTE: Using memory pool with 37406720 bytes.
+NOTE: Passed training data 2 times.
+NOTE: Training used 332224 bytes of work memory.
+NOTE: The subtree sequence contains 2 subtrees. The largest has 3 nodes and 2 leaves.
+NOTE: Using subtree with 3 nodes and 2 leaves.
+NOTE: Using subtree with 3 nodes and 2 leaves.
+NOTE: The data set WORK._RULE has 52 observations and 6 variables.
+ 
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.24 seconds
+      cpu time            0.17 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: There were 1823 observations read from the data set WORK.PROF_TMP.
+NOTE: PROCEDURE ARBOR used (Total process time):
+      real time           0.28 seconds
+      cpu time            0.20 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._RULE to WORK._TEMPRULE.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 52 observations read from the data set WORK._RULE.
+NOTE: The data set WORK._TEMPRULE has 52 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Deleting WORK._RULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPRULE.
+      WHERE stat in ('VARIABLE', 'WORTH');
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+NOTE: The data set WORK._TEMPRULE has 6 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 6 observations read from the data set WORK._TEMPRULE.
+      WHERE worth not = .;
+NOTE: The PROCEDURE PRINT printed page 6.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPRULE.
+      WHERE (worth=.) or (worth>=0.01);
+NOTE: The data set WORK._TEMPRULE has 4 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPRULE to EMWS1.PROF_SELVARS.
+NOTE: There were 4 observations read from the data set WORK._TEMPRULE.
+NOTE: 4 observations added.
+NOTE: The data set EMWS1.PROF_SELVARS has 18 observations and 5 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGS (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK.PROF_VALIDTMP (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._STAT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._TEMPRULE (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Deleting EMWS1.PROF_MACS (memtype=CATALOG).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 18 observations read from the data set EMWS1.PROF_SELVARS.
+NOTE: The data set EMWS1.PROF_SELVARS has 18 observations and 5 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+WARNING: Multiple lengths were specified for the BY variable Variable by input data sets. This might cause unexpected results.
+NOTE: There were 18 observations read from the data set EMWS1.PROF_SELVARS.
+NOTE: There were 17 observations read from the data set EMWS1.PROF_VARIABLESET.
+NOTE: The data set EMWS1.PROF_SELVARS has 18 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 18 observations read from the data set EMWS1.PROF_SELVARS.
+NOTE: 13 observations with duplicate key values were deleted.
+NOTE: The data set WORK._SUMMARYVARS has 5 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._SUMMARYVARS.
+NOTE: The data set EMWS1.PROF_STATS has 5 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+*------------------------------------------------------------*
+* Profile Entire Data
+*------------------------------------------------------------*
+ 
+NOTE: There were 5 observations read from the data set EMWS1.PROF_STATS.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: The file _MAC is:
+      Catalog Name=WORK.MACROS.VARIABLES.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=4,
+      Created=Sunday, 22 December 2019 19:47:49,
+      Last Modified=Sunday, 22 December 2019 19:47:49,
+      Filename=C:\Users\TAN~1.JOR\AppData\Local\Temp\SAS Temporary Files\_TD187808_H5CG9074SNT_\macros.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 2 records were written to the file _MAC.
+      The minimum record length was 12.
+      The maximum record length was 13.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: %INCLUDE (level 1) file _MAC is file WORK.MACROS.VARIABLES.SOURCE.
+16291 +%macro _vars;
+16292 +%mend _vars;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref _MAC has been deassigned.
+ 
+NOTE: Records processed = 1823   Memory used = 511K.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.07 seconds
+ 
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: There were 1823 observations read from the data set EMWS1.CLUS_TRAIN.
+NOTE: The data set WORK._TEMPCLASS has 15 observations and 9 variables.
+NOTE: PROCEDURE DMDB used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.09 seconds
+ 
+ 
+ 
+NOTE: There were 15 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._TEMPCLASS has 15 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 15 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._CLASS has 15 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 15 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._STAT has 6 observations and 4 variables.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._STAT.
+      WHERE _TYPE_=1;
+NOTE: The data set WORK._STAT has 5 observations and 2 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Deleting WORK._TEMPCLASS (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 15 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._CLASS has 15 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._CLASS to EMWS1.PROF_CLASSDIST.
+NOTE: BASE data set does not exist. DATA file is being copied to BASE file.
+NOTE: There were 15 observations read from the data set WORK._CLASS.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 15 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._STAT.
+NOTE: The data set WORK._STAT has 5 observations and 2 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set EMWS1.PROF_STATS.
+NOTE: There were 5 observations read from the data set WORK._STAT.
+NOTE: The data set EMWS1.PROF_STATS has 5 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.03 seconds
+ 
+ 
+*------------------------------------------------------------*
+* Summarizing variables
+* SEGMENT= _SEGMENT_
+*------------------------------------------------------------*
+ 
+NOTE: There were 4 observations read from the data set WORK._SEGMENT_.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set EMWS1.PROF_SELVARS.
+      WHERE (SegmentVariable='_SEGMENT_') and (SegmentValue='3');
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.07 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.09 seconds
+ 
+ 
+ 
+NOTE: The file _MAC is:
+      Catalog Name=WORK.MACROS.VARIABLES.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=5,
+      Created=Sunday, 22 December 2019 19:47:49,
+      Last Modified=Sunday, 22 December 2019 19:47:49,
+      Filename=C:\Users\TAN~1.JOR\AppData\Local\Temp\SAS Temporary Files\_TD187808_H5CG9074SNT_\macros.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 2 records were written to the file _MAC.
+      The minimum record length was 12.
+      The maximum record length was 13.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+ 
+ 
+NOTE: %INCLUDE (level 1) file _MAC is file WORK.MACROS.VARIABLES.SOURCE.
+16293 +%macro _vars;
+16294 +%mend _vars;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref _MAC has been deassigned.
+ 
+NOTE: Records processed = 749   Memory used = 511K.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.14 seconds
+ 
+NOTE: There were 749 observations read from the data set EMWS1.CLUS_TRAIN.
+      WHERE _SEGMENT_=3;
+NOTE: There were 749 observations read from the data set WORK.PROF_TMP.
+NOTE: The data set WORK._TEMPCLASS has 12 observations and 9 variables.
+NOTE: PROCEDURE DMDB used (Total process time):
+      real time           0.16 seconds
+      cpu time            0.15 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._TEMPCLASS has 12 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._CLASS has 12 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._STAT has 6 observations and 4 variables.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._STAT.
+      WHERE _TYPE_=1;
+NOTE: The data set WORK._STAT has 5 observations and 2 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Deleting WORK._TEMPCLASS (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 12 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._CLASS has 12 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._CLASS to EMWS1.PROF_CLASSDIST.
+NOTE: There were 12 observations read from the data set WORK._CLASS.
+NOTE: 12 observations added.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 27 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: There were 5 observations read from the data set WORK._STAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 8 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPSTAT to EMWS1.PROF_STATS.
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: 5 observations added.
+NOTE: The data set EMWS1.PROF_STATS has 10 observations and 8 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGMENT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._INTERVAL (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._CLASS (memtype=DATA).
+NOTE: Deleting WORK._TEMPSTAT (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set EMWS1.PROF_SELVARS.
+      WHERE (SegmentVariable='_SEGMENT_') and (SegmentValue='2');
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.06 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.07 seconds
+ 
+ 
+ 
+NOTE: The file _MAC is:
+      Catalog Name=WORK.MACROS.VARIABLES.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=5,
+      Created=Sunday, 22 December 2019 19:47:49,
+      Last Modified=Sunday, 22 December 2019 19:47:50,
+      Filename=C:\Users\TAN~1.JOR\AppData\Local\Temp\SAS Temporary Files\_TD187808_H5CG9074SNT_\macros.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 2 records were written to the file _MAC.
+      The minimum record length was 12.
+      The maximum record length was 13.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: %INCLUDE (level 1) file _MAC is file WORK.MACROS.VARIABLES.SOURCE.
+16295 +%macro _vars;
+16296 +%mend _vars;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref _MAC has been deassigned.
+ 
+NOTE: Records processed = 518   Memory used = 511K.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.12 seconds
+ 
+NOTE: There were 518 observations read from the data set EMWS1.CLUS_TRAIN.
+      WHERE _SEGMENT_=2;
+NOTE: There were 518 observations read from the data set WORK.PROF_TMP.
+NOTE: The data set WORK._TEMPCLASS has 11 observations and 9 variables.
+NOTE: PROCEDURE DMDB used (Total process time):
+      real time           0.17 seconds
+      cpu time            0.14 seconds
+ 
+ 
+ 
+NOTE: There were 11 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._TEMPCLASS has 11 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 11 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._CLASS has 11 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 11 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._STAT has 6 observations and 4 variables.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._STAT.
+      WHERE _TYPE_=1;
+NOTE: The data set WORK._STAT has 5 observations and 2 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Deleting WORK._TEMPCLASS (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 11 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._CLASS has 11 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._CLASS to EMWS1.PROF_CLASSDIST.
+NOTE: There were 11 observations read from the data set WORK._CLASS.
+NOTE: 11 observations added.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 38 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: There were 5 observations read from the data set WORK._STAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 5 observations and 8 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPSTAT to EMWS1.PROF_STATS.
+NOTE: There were 5 observations read from the data set WORK._TEMPSTAT.
+NOTE: 5 observations added.
+NOTE: The data set EMWS1.PROF_STATS has 15 observations and 8 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGMENT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._INTERVAL (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._CLASS (memtype=DATA).
+NOTE: Deleting WORK._TEMPSTAT (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set EMWS1.PROF_SELVARS.
+      WHERE (SegmentVariable='_SEGMENT_') and (SegmentValue='1');
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.09 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.12 seconds
+ 
+ 
+ 
+NOTE: The file _MAC is:
+      Catalog Name=WORK.MACROS.VARIABLES.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=5,
+      Created=Sunday, 22 December 2019 19:47:49,
+      Last Modified=Sunday, 22 December 2019 19:47:51,
+      Filename=C:\Users\TAN~1.JOR\AppData\Local\Temp\SAS Temporary Files\_TD187808_H5CG9074SNT_\macros.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 2 records were written to the file _MAC.
+      The minimum record length was 12.
+      The maximum record length was 13.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+ 
+ 
+NOTE: %INCLUDE (level 1) file _MAC is file WORK.MACROS.VARIABLES.SOURCE.
+16297 +%macro _vars;
+16298 +%mend _vars;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref _MAC has been deassigned.
+ 
+NOTE: Records processed = 330   Memory used = 511K.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.21 seconds
+      cpu time            0.18 seconds
+ 
+NOTE: There were 330 observations read from the data set EMWS1.CLUS_TRAIN.
+      WHERE _SEGMENT_=1;
+NOTE: There were 330 observations read from the data set WORK.PROF_TMP.
+NOTE: The data set WORK._TEMPCLASS has 9 observations and 9 variables.
+NOTE: PROCEDURE DMDB used (Total process time):
+      real time           0.25 seconds
+      cpu time            0.20 seconds
+ 
+ 
+ 
+NOTE: There were 9 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._TEMPCLASS has 9 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 9 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._CLASS has 9 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.06 seconds
+ 
+ 
+ 
+NOTE: There were 9 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._STAT has 5 observations and 4 variables.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._STAT.
+      WHERE _TYPE_=1;
+NOTE: The data set WORK._STAT has 4 observations and 2 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Deleting WORK._TEMPCLASS (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 9 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._CLASS has 9 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._CLASS to EMWS1.PROF_CLASSDIST.
+NOTE: There were 9 observations read from the data set WORK._CLASS.
+NOTE: 9 observations added.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 47 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: There were 4 observations read from the data set WORK._STAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 8 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPSTAT to EMWS1.PROF_STATS.
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: 4 observations added.
+NOTE: The data set EMWS1.PROF_STATS has 19 observations and 8 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGMENT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._INTERVAL (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._CLASS (memtype=DATA).
+NOTE: Deleting WORK._TEMPSTAT (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set EMWS1.PROF_SELVARS.
+      WHERE (SegmentVariable='_SEGMENT_') and (SegmentValue='4');
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 7 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: DATA STEP view saved on file WORK.PROF_TMP.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.09 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.15 seconds
+      cpu time            0.11 seconds
+ 
+ 
+ 
+NOTE: The file _MAC is:
+      Catalog Name=WORK.MACROS.VARIABLES.SOURCE,
+      Catalog Page Size=4096,
+      Number of Catalog Pages=5,
+      Created=Sunday, 22 December 2019 19:47:49,
+      Last Modified=Sunday, 22 December 2019 19:47:52,
+      Filename=C:\Users\TAN~1.JOR\AppData\Local\Temp\SAS Temporary Files\_TD187808_H5CG9074SNT_\macros.sas7bcat,
+      Release Created=9.0401M3,Host Created=X64_8PRO
+ 
+NOTE: 2 records were written to the file _MAC.
+      The minimum record length was 12.
+      The maximum record length was 13.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.00 seconds
+ 
+ 
+NOTE: %INCLUDE (level 1) file _MAC is file WORK.MACROS.VARIABLES.SOURCE.
+16299 +%macro _vars;
+16300 +%mend _vars;
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref _MAC has been deassigned.
+ 
+NOTE: Records processed = 226   Memory used = 511K.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_DATA.
+NOTE: There were 1823 observations read from the data set EMWS1.FIMPORT3_TRAIN.
+NOTE: View WORK.PROF_TMP.VIEW used (Total process time):
+      real time           0.14 seconds
+      cpu time            0.12 seconds
+ 
+NOTE: There were 226 observations read from the data set EMWS1.CLUS_TRAIN.
+      WHERE _SEGMENT_=4;
+NOTE: There were 226 observations read from the data set WORK.PROF_TMP.
+NOTE: The data set WORK._TEMPCLASS has 5 observations and 9 variables.
+NOTE: PROCEDURE DMDB used (Total process time):
+      real time           0.18 seconds
+      cpu time            0.14 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._TEMPCLASS has 5 observations and 9 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._TEMPCLASS.
+NOTE: The data set WORK._CLASS has 5 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._STAT has 5 observations and 4 variables.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._STAT.
+      WHERE _TYPE_=1;
+NOTE: The data set WORK._STAT has 4 observations and 2 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+NOTE: Deleting WORK._TEMPCLASS (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 5 observations read from the data set WORK._CLASS.
+NOTE: The data set WORK._CLASS has 5 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._CLASS to EMWS1.PROF_CLASSDIST.
+NOTE: There were 5 observations read from the data set WORK._CLASS.
+NOTE: 5 observations added.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 52 observations and 6 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: There were 4 observations read from the data set WORK._STAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: The data set WORK._TEMPSTAT has 4 observations and 8 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: Appending WORK._TEMPSTAT to EMWS1.PROF_STATS.
+NOTE: There were 4 observations read from the data set WORK._TEMPSTAT.
+NOTE: 4 observations added.
+NOTE: The data set EMWS1.PROF_STATS has 23 observations and 8 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.00 seconds
+ 
+ 
+ 
+NOTE: The file WORK._SEGMENT (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: The file WORK._INTERVAL (memtype=(DATA VIEW)) was not found, but appears on a DELETE statement.
+NOTE: Deleting WORK.PROF_TMP (memtype=VIEW).
+NOTE: Deleting WORK._CLASS (memtype=DATA).
+NOTE: Deleting WORK._TEMPSTAT (memtype=DATA).
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.00 seconds
+ 
+ 
+NOTE: Fileref X has been deassigned.
+ 
+NOTE: There were 52 observations read from the data set EMWS1.PROF_CLASSDIST.
+NOTE: The data set EMWS1.PROF_CLASSDIST has 52 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: The data set WORK.EM_USER_REPORT has 132 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 18 observations read from the data set EMWS1.PROF_STATS.
+      WHERE WORTH not = .;
+NOTE: The data set EMWS1.PROF_WORTH has 18 observations and 8 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 132 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 264 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 4 observations read from the data set EMWS1.PROF_SIZE.
+NOTE: The data set EMWS1.PROF_SIZE has 4 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 264 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 397 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+ 
+NOTE: There were 397 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 529 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+ 
+ 
+ 
+NOTE: There were 529 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 661 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.06 seconds
+ 
+ 
+ 
+NOTE: There were 661 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 793 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.04 seconds
+ 
+ 
+ 
+NOTE: There were 793 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 925 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.06 seconds
+ 
+ 
+ 
+NOTE: The file EMWS1._SUMMARYVARS (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.DATA_STAT (memtype=DATA) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_MACS (memtype=CATALOG) was not found, but appears on a DELETE statement.
+NOTE: The file EMWS1.PROF_INTERVAL (memtype=CATALOG) was not found, but appears on a DELETE statement.
+NOTE: Deleting EMWS1.PROF_SELVARS (memtype=DATA).
+16301  *------------------------------------------------------------*;
+16302  * End TRAIN: Prof;
+16303  *------------------------------------------------------------*;
+16304  *------------------------------------------------------------*;
+16305  * Close any missing semi colons;
+16306  *------------------------------------------------------------*;
+16307  ;
+16308  ;
+16309  ;
+16310  ;
+16311  quit;
+ 
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.01 seconds
+ 
+ 
+16312  *------------------------------------------------------------*;
+16313  * Close any unbalanced quotes;
+16314  *------------------------------------------------------------*;
+16315  /*; *"; *'; */
+16316  ;
+16317  run;
+16318  quit;
+16319  /* Reset EM Options */
+16320  options formchar="|----|+|---+=|-/\<>*";
+16321  options nocenter ls=256 ps=10000;
+16322  goptions reset=all device=GIF NODISPLAY;
+ 
+16323  proc sort data=WORK.EM_USER_REPORT;
+16324  by ID VIEW;
+16325  run;
+ 
+NOTE: There were 925 observations read from the data set WORK.EM_USER_REPORT.
+NOTE: The data set WORK.EM_USER_REPORT has 925 observations and 4 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.01 seconds
+ 
+ 
+16326  proc freq data=EMWS1.Prof_WORTH noprint order=data;
+16327  table SEGMENTVARIABLE/ out=WORK.REPORTVALUE;
+16328  run;
+ 
+NOTE: There were 18 observations read from the data set EMWS1.PROF_WORTH.
+NOTE: The data set WORK.REPORTVALUE has 1 observations and 3 variables.
+NOTE: PROCEDURE FREQ used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+ 
+ 
+16329  proc freq data=EMWS1.Prof_SIZE noprint order=data;
+16330  table SEGMENTVARIABLE/ out=WORK.REPORTVALUE;
+16331  run;
+ 
+NOTE: There were 4 observations read from the data set EMWS1.PROF_SIZE.
+NOTE: The data set WORK.REPORTVALUE has 1 observations and 3 variables.
+NOTE: PROCEDURE FREQ used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.00 seconds
+ 
+ 
+*------------------------------------------------------------*
+* Score Log
+Date:                22 December 2019
+Time:                19:47:56 o'clock
+*------------------------------------------------------------*
+16433  %let EMEXCEPTIONSTRING=;
+16434  *------------------------------------------------------------*;
+16435  * SCORE: Prof;
+16436  *------------------------------------------------------------*;
+16437  %let EM_ACTION = SCORE;
+16438  %let syscc = 0;
+16439  %macro main;
+16440     %if %sysfunc(indexw(&EM_DEBUG, _ALL_)) or %sysfunc(indexw(&EM_DEBUG, SOURCE)) %then %do;
+16441         options MPRINT;
+16442     %end;
+16443
+16444     filename temp catalog 'sashelp.emexpl.profile_macros.source';
+16445     %include temp;
+16446     filename temp;
+16447
+16448     /* Initialize property macro variables */
+16449     %SetProperties;
+16450
+16451     %if %upcase(&EM_ACTION) = CREATE %then %do;
+16452
+16453         filename temp catalog 'sashelp.emexpl.profile_create.source';
+16454         %include temp;
+16455         filename temp;
+16456         %create;
+16457     %end;
+16458     %else
+16459     %if %upcase(&EM_ACTION) = TRAIN %then %do;
+16460
+16461         filename temp catalog 'sashelp.emexpl.profile_train.source';
+16462         %include temp;
+16463         filename temp;
+16464         %train;
+16465     %end;
+16466  %mend main;
+16467
+16468  %main;
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMEXPL.PROFILE_MACROS.SOURCE.
+16469 +%macro SetProperties;
+16470 +   %em_checkmacro(name=EM_PROPERTY_PROFILEALL,         global=Y, value=N);
+16471 +   %em_checkmacro(name=EM_PROPERTY_USEREPORTVARS,      global=Y, value=Y);
+16472 +   %em_checkmacro(name=EM_PROPERTY_OTHERPERCENTCUTOFF, global=Y, value=95);
+16473 +   %em_checkmacro(name=EM_PROPERTY_TARGETROLE,         global=Y, value=NONE);
+16474 +   %em_checkmacro(name=EM_PROPERTY_NUMHISTBARS,        global=Y, value=8);
+16475 +   %em_checkmacro(name=EM_PROPERTY_MINWORTH,           global=Y, value=0.01);
+16476 +   %em_checkmacro(name=EM_PROPERTY_MAXDEPTH,           global=Y, value=1);
+16477 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMREPORT,       global=Y, value=10);
+16478 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMINPUT,        global=Y, value=10);
+16479 +   %em_checkmacro(name=EM_PROPERTY_PRINTWORTH,         global=Y, value=Y);
+16480 +%mend SetProperties;
+16481 +
+16482 +
+16483 +%macro makeVarMacros(level= );
+16484 +
+16485 +    %let numvars = 0;
+16486 +    %let where   = '';
+16487 +
+16488 +    %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+16489 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL="&level"  and USE in('Y', 'D'));
+16490 +    %else
+16491 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE ='INPUT' and LEVEL="&level" and USE in('Y', 'D'));
+16492 +
+16493 +    %if &level = INTERVAL %then %do;
+16494 +        %let numvars = %eval( &EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED);
+16495 +        %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+16496 +             %let numvars = %eval(&numvars + &EM_NUM_INTERVAL_TARGET);
+16497 +    %end;
+16498 +    %else %do;
+16499 +        %if &level = NOMINAL %then %do;
+16500 +            %let numvars = %eval(&EM_NUM_BINARY_INPUT + &EM_NUM_NOMINAL_INPUT +  &EM_NUM_BINARY_REJECTED + &EM_NUM_NOMINAL_REJECTED);
+16501 +             %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+16502 +                 %let numvars = %eval(&numvars + &EM_NUM_BINARY_TARGET + &EM_NUM_NOMINAL_TARGET);
+16503 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL in('NOMINAL', 'BINARY') and USE in('Y', 'D'));
+16504 +             %end;
+16505 +             %else
+16506 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE ='INPUT' and LEVEL in("NOMINAL", "BINARY") and USE in('Y', 'D'));
+16507 +
+16508 +        %end;
+16509 +        %else %do;
+16510 +            %let numvars = %eval(&EM_NUM_ORDINAL_INPUT + &EM_NUM_ORDINAL_REJECTED);
+16511 +            %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+16512 +                %let numvars = %eval(&numvars + &EM_NUM_ORDINAL_TARGET);
+16513 +        %end;
+16514 +    %end;
+16515 +
+16516 +    %if &numvars>0 %then %do;
+16517 +         %let numloop = %sysfunc(ceil(&numvars/10000));
+16518 +         %let loopcount = 0;
+16519 +
+16520 +         %do %while((&numloop - &loopcount) > 0);
+16521 +             %let first = %eval((&loopcount*10000) + 1);
+16522 +             %let last  = %eval(&first + 10000);
+16523 +             %let loopcount = %eval(&loopcount +1);
+16524 +             %let centry = &EM_LIB..&EM_NODEID._MACS.&LEVEL._&loopcount..SOURCE;
+16525 +             filename X catalog "&centry";
+16526 +             data _null_;
+16527 +                length _STRING_ $80;
+16528 +                retain _STRING_ ;
+16529 +                file X;
+16530 +                set &EM_DATA_VARIABLESET(firstobs=&first obs=&last) end=eof;
+16531 +
+16532 +                where &where;
+16533 +
+16534 +                if _N_=1 then
+16535 +                   put '%macro _PROFVAR;';
+16536 +
+16537 +                if (length(_STRING_) + length(trim(NAME))+ 1  < 80) then do;
+16538 +                   _STRING_ = trim(_STRING_)!!' '!!trim(NAME);
+16539 +                   if eof then do;
+16540 +                      put _STRING_;
+16541 +                      put '%mend _PROFVAR;';
+16542 +                   end;
+16543 +                end;
+16544 +                else do;
+16545 +                   put _STRING_;
+16546 +                  _string_ = TRIM(NAME);
+16547 +                   if eof then do;
+16548 +                      put _string_;
+16549 +                      put '%mend _PROFVAR;';
+16550 +                   end;
+16551 +                end;
+16552 +             run;
+16553 +             filename X;
+16554 +         %end;
+16555 +    %end;
+16556 +
+16557 +%mend makeVarMacros;
+16558 +
+16559 +
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+16560  *------------------------------------------------------------*;
+16561  * End SCORE: Prof;
+16562  *------------------------------------------------------------*;
+ 
+16563  *------------------------------------------------------------*;
+16564  * Prof: Scoring DATA data;
+16565  *------------------------------------------------------------*;
+16566  data EMWS1.Prof_TRAIN
+16567  / view=EMWS1.Prof_TRAIN
+16568  ;
+16569  set EMWS1.Clus_TRAIN
+16570  ;
+16571  run;
+ 
+NOTE: DATA STEP view saved on file EMWS1.PROF_TRAIN.
+NOTE: A stored DATA STEP view cannot run under a different operating system.
+NOTE: View EMWS1.CLUS_TRAIN.VIEW used (Total process time):
+      real time           0.08 seconds
+      cpu time            0.07 seconds
+ 
+NOTE: DATA statement used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.09 seconds
+ 
+ 
+16572  quit;
+ 
+16574  *------------------------------------------------------------*;
+16575  * Prof: Computing metadata for TRAIN data;
+16576  *------------------------------------------------------------*;
+ 
+NOTE: View EMWS1.PROF_TRAIN.VIEW used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.09 seconds
+ 
+NOTE: View EMWS1.PROF_TRAIN.VIEW used (Total process time):
+      real time           0.18 seconds
+      cpu time            0.15 seconds
+ 
+*------------------------------------------------------------*
+* Report Log
+Date:                22 December 2019
+Time:                19:47:58 o'clock
+*------------------------------------------------------------*
+16937  %let EMEXCEPTIONSTRING=;
+16938  *------------------------------------------------------------*;
+16939  * REPORT: Prof;
+16940  *------------------------------------------------------------*;
+16941  %let EM_ACTION = REPORT;
+16942  %let syscc = 0;
+16943  %macro main;
+16944     %if %sysfunc(indexw(&EM_DEBUG, _ALL_)) or %sysfunc(indexw(&EM_DEBUG, SOURCE)) %then %do;
+16945         options MPRINT;
+16946     %end;
+16947
+16948     filename temp catalog 'sashelp.emexpl.profile_macros.source';
+16949     %include temp;
+16950     filename temp;
+16951
+16952     /* Initialize property macro variables */
+16953     %SetProperties;
+16954
+16955     %if %upcase(&EM_ACTION) = CREATE %then %do;
+16956
+16957         filename temp catalog 'sashelp.emexpl.profile_create.source';
+16958         %include temp;
+16959         filename temp;
+16960         %create;
+16961     %end;
+16962     %else
+16963     %if %upcase(&EM_ACTION) = TRAIN %then %do;
+16964
+16965         filename temp catalog 'sashelp.emexpl.profile_train.source';
+16966         %include temp;
+16967         filename temp;
+16968         %train;
+16969     %end;
+16970  %mend main;
+16971
+16972  %main;
+NOTE: %INCLUDE (level 1) file TEMP is file SASHELP.EMEXPL.PROFILE_MACROS.SOURCE.
+16973 +%macro SetProperties;
+16974 +   %em_checkmacro(name=EM_PROPERTY_PROFILEALL,         global=Y, value=N);
+16975 +   %em_checkmacro(name=EM_PROPERTY_USEREPORTVARS,      global=Y, value=Y);
+16976 +   %em_checkmacro(name=EM_PROPERTY_OTHERPERCENTCUTOFF, global=Y, value=95);
+16977 +   %em_checkmacro(name=EM_PROPERTY_TARGETROLE,         global=Y, value=NONE);
+16978 +   %em_checkmacro(name=EM_PROPERTY_NUMHISTBARS,        global=Y, value=8);
+16979 +   %em_checkmacro(name=EM_PROPERTY_MINWORTH,           global=Y, value=0.01);
+16980 +   %em_checkmacro(name=EM_PROPERTY_MAXDEPTH,           global=Y, value=1);
+16981 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMREPORT,       global=Y, value=10);
+16982 +   %em_checkmacro(name=EM_PROPERTY_MAXNUMINPUT,        global=Y, value=10);
+16983 +   %em_checkmacro(name=EM_PROPERTY_PRINTWORTH,         global=Y, value=Y);
+16984 +%mend SetProperties;
+16985 +
+16986 +
+16987 +%macro makeVarMacros(level= );
+16988 +
+16989 +    %let numvars = 0;
+16990 +    %let where   = '';
+16991 +
+16992 +    %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+16993 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL="&level"  and USE in('Y', 'D'));
+16994 +    %else
+16995 +        %let where = (ROLE = 'REJECTED' and LEVEL="&level" and USE='Y') or (ROLE ='INPUT' and LEVEL="&level" and USE in('Y', 'D'));
+16996 +
+16997 +    %if &level = INTERVAL %then %do;
+16998 +        %let numvars = %eval( &EM_NUM_INTERVAL_INPUT + &EM_NUM_INTERVAL_REJECTED);
+16999 +        %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+17000 +             %let numvars = %eval(&numvars + &EM_NUM_INTERVAL_TARGET);
+17001 +    %end;
+17002 +    %else %do;
+17003 +        %if &level = NOMINAL %then %do;
+17004 +            %let numvars = %eval(&EM_NUM_BINARY_INPUT + &EM_NUM_NOMINAL_INPUT +  &EM_NUM_BINARY_REJECTED + &EM_NUM_NOMINAL_REJECTED);
+17005 +             %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then %do;
+17006 +                 %let numvars = %eval(&numvars + &EM_NUM_BINARY_TARGET + &EM_NUM_NOMINAL_TARGET);
+17007 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE in('INPUT', 'TARGET') and LEVEL in('NOMINAL', 'BINARY') and USE in('Y', 'D'));
+17008 +             %end;
+17009 +             %else
+17010 +                 %let where = (ROLE = 'REJECTED' and LEVEL in('NOMINAL', 'BINARY') and USE='Y') or (ROLE ='INPUT' and LEVEL in("NOMINAL", "BINARY") and USE in('Y', 'D'));
+17011 +
+17012 +        %end;
+17013 +        %else %do;
+17014 +            %let numvars = %eval(&EM_NUM_ORDINAL_INPUT + &EM_NUM_ORDINAL_REJECTED);
+17015 +            %if (%upcase(&EM_PROPERTY_TARGETROLE) eq INPUT) %then
+17016 +                %let numvars = %eval(&numvars + &EM_NUM_ORDINAL_TARGET);
+17017 +        %end;
+17018 +    %end;
+17019 +
+17020 +    %if &numvars>0 %then %do;
+17021 +         %let numloop = %sysfunc(ceil(&numvars/10000));
+17022 +         %let loopcount = 0;
+17023 +
+17024 +         %do %while((&numloop - &loopcount) > 0);
+17025 +             %let first = %eval((&loopcount*10000) + 1);
+17026 +             %let last  = %eval(&first + 10000);
+17027 +             %let loopcount = %eval(&loopcount +1);
+17028 +             %let centry = &EM_LIB..&EM_NODEID._MACS.&LEVEL._&loopcount..SOURCE;
+17029 +             filename X catalog "&centry";
+17030 +             data _null_;
+17031 +                length _STRING_ $80;
+17032 +                retain _STRING_ ;
+17033 +                file X;
+17034 +                set &EM_DATA_VARIABLESET(firstobs=&first obs=&last) end=eof;
+17035 +
+17036 +                where &where;
+17037 +
+17038 +                if _N_=1 then
+17039 +                   put '%macro _PROFVAR;';
+17040 +
+17041 +                if (length(_STRING_) + length(trim(NAME))+ 1  < 80) then do;
+17042 +                   _STRING_ = trim(_STRING_)!!' '!!trim(NAME);
+17043 +                   if eof then do;
+17044 +                      put _STRING_;
+17045 +                      put '%mend _PROFVAR;';
+17046 +                   end;
+17047 +                end;
+17048 +                else do;
+17049 +                   put _STRING_;
+17050 +                  _string_ = TRIM(NAME);
+17051 +                   if eof then do;
+17052 +                      put _string_;
+17053 +                      put '%mend _PROFVAR;';
+17054 +                   end;
+17055 +                end;
+17056 +             run;
+17057 +             filename X;
+17058 +         %end;
+17059 +    %end;
+17060 +
+17061 +%mend makeVarMacros;
+17062 +
+17063 +
+NOTE: %INCLUDE (level 1) ending.
+NOTE: Fileref TEMP has been deassigned.
+17064  *------------------------------------------------------------*;
+17065  * End REPORT: Prof;
+17066  *------------------------------------------------------------*;
+ 
+17067  /* Reset EM Options */
+17068  options formchar="|----|+|---+=|-/\<>*";
+17069  options nocenter ls=256 ps=10000;
+17070  goptions reset=all device=GIF NODISPLAY;
+ 

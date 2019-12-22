@@ -1,0 +1,29 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+Imputation Summary
+Number Of Observations
+
+                                                                                                              Number of
+                         Impute                                   Impute             Measurement                Missing
+Variable Name            Method      Imputed Variable              Value    Role        Level       Label     for TRAIN
+
+all_day_maintain         COUNT       IMP_all_day_maintain            0      INPUT     BINARY                        366
+closing_at_daily_high    COUNT       IMP_closing_at_daily_high       0      INPUT     BINARY                        366
+closing_at_daily_low     COUNT       IMP_closing_at_daily_low        0      INPUT     BINARY                        366
+closing_price            CONSTANT    IMP_closing_price               .      INPUT     INTERVAL                      366
+daily_high               CONSTANT    IMP_daily_high                  .      INPUT     INTERVAL                      366
+daily_low                CONSTANT    IMP_daily_low                   .      INPUT     INTERVAL                      366
+open_equals_closing      COUNT       IMP_open_equals_closing         0      INPUT     BINARY                        366
+open_price               CONSTANT    IMP_open_price                  .      INPUT     INTERVAL                      366
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Variable Distribution Training Data
+
+        Number of
+          Missing    Number of    Percent of
+Obs     for TRAIN    Variables     Variables
+
+ 1            366        8            100   

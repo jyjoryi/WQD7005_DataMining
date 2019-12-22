@@ -1,0 +1,34 @@
+ 
+                                                                                                                                                                                                                                                                
+ 
+ 
+Summary Statistics for Class Targets
+
+Data=DATA
+
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+
+ trend         .       downward        712       39.0565         
+ trend         .       maintain        396       21.7224         
+ trend         .       upward          715       39.2211         
+
+
+Data=TRAIN
+
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+
+ trend         .       downward        355       39.0539         
+ trend         .       maintain        197       21.6722         
+ trend         .       upward          357       39.2739         
+
+
+Data=VALIDATE
+
+            Numeric    Formatted    Frequency
+Variable     Value       Value        Count      Percent    Label
+
+ trend         .       downward        357       39.0591         
+ trend         .       maintain        199       21.7724         
+ trend         .       upward          358       39.1685         
