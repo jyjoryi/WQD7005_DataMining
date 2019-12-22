@@ -90,7 +90,7 @@ class PricecrawlerDownloaderMiddleware(object):
         # - or return a Request object
         # - or raise IgnoreRequest: process_exception() methods of
         #   installed downloader middleware will be called
-        lastYear  = (date.today() - timedelta(days = 365)).strftime('%d.%m.%y')
+        lastYear  = (date.today() - timedelta(days = 5*365)).strftime('%d.%m.%y')
         todayDate = date.today().strftime('%d.%m.%y')
         my_url = 'https://markets.businessinsider.com/commodities/historical-prices/gold-price/usd/'  + lastYear + '_' + todayDate
         if request.url != my_url:

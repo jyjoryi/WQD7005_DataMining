@@ -34,7 +34,7 @@ from scrapy.loader import ItemLoader
 
 class goldSpider(scrapy.Spider):
     name = 'gold'
-    lastYear  = (date.today() - timedelta(days = 365)).strftime('%d.%m.%y')
+    lastYear  = (date.today() - timedelta(days = 5*365)).strftime('%d.%m.%y')
     todayDate = date.today().strftime('%d.%m.%y')
     my_url = 'https://markets.businessinsider.com/commodities/historical-prices/gold-price/usd/'  + lastYear + '_' + todayDate
     start_urls = [my_url]
