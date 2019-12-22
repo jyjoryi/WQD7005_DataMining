@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?><_ROOT_  Location="CATALOG" Catalog="SASHELP.EMSAMP.FIMPORT.SOURCE" ImportType="Local" GuessRows="500"
+ Delimiter="," NameRow="Y" SkipRows="0" MaxRows="1000000" MaxCols="10000" FileType="csv"
+ Role="TRAIN" ForceRun="N" Summarize="N" AdvancedAdvisor="N" RunAction="Train" Component="FileImport"
+ IFileName="C:\Users\tan.joryi\Desktop\p\data_mining\03_explore_data\goldprice_modified.csv"
+ AccessTable="NoTableName" UserID="NoUserID" Password="NoPassword" RawCreateTime="1892663923.7"
+ CreateTime="22DEC2019:19:58:44" RunId="88e77e30-dca6-4f18-a3b0-feac128cc4cb">
+<VARIABLEPROPERTIES/>
+<FILEPROPERTIES ><![CDATA[
+USERTRAINCODE
+USERSCORECODE
+USERREPORTCODE
+VARIABLESETDELTA
+DELTACODE
+EMNOTES
+]]>
+</FILEPROPERTIES><EMTARGETATTRIBUTES/>
+</_ROOT_>

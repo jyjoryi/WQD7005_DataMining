@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?><_ROOT_  Location="CATALOG" Catalog="SASHELP.EMEXPL.GRAPHEXPLORE.SOURCE" EmSampleMethod="FIRSTN"
+ EmSampleSize="DEFAULT" EmRandomSeed="12345" Target="Y" GroupByTarget="Y" ForceRun="N"
+ RunAction="Train" Component="GraphExplore" DataSource="SAMPLE" DataNeeded="Y" RawCreateTime="1887844120.4"
+ CreateTime="28OCT2019:01:08:40" RunId="a7bf55fc-2274-4ae3-bc56-df8b3fd3aae5" RawLastTimeRun="1887844495.6"
+ RawRunTime="19.087000132" LastTimeRun="28OCT2019:01:14:56" RunTime="0 Hr. 0 Min. 19.09 Sec."
+>
+<VARIABLEPROPERTIES/>
+<FILEPROPERTIES ><![CDATA[
+USERTRAINCODE
+USERSCORECODE
+USERREPORTCODE
+]]>
+</FILEPROPERTIES></_ROOT_>
